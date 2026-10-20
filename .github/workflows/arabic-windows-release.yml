@@ -71,7 +71,9 @@ jobs:
           npm pkg set "version=$version" --prefix desktop/launcher
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $env:ELECTRON_BUILDER_COMPRESSION_LEVEL = '1'
-          npm run --prefix desktop/launcher dist:win
+          # Electron Builder detects CI and otherwise tries to publish using
+          # GH_TOKEN. Publish ONLY after verification via action-gh-release.
+          npm run --prefix desktop/launcher dist:win -- --publish never
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node desktop/validate-windows.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
