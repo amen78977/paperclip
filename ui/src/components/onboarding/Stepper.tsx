@@ -92,6 +92,7 @@ export function Stepper({
   step,
   total = AGENT_ARC_TOTAL_STEPS,
   labels = AGENT_ARC_STEP_LABELS,
+  locale = "en",
   canJumpToStep,
   onJumpToStep,
 }: {
@@ -104,6 +105,7 @@ export function Stepper({
    * be worse than a bare number.
    */
   labels?: readonly string[];
+  locale?: "ar" | "en";
   canJumpToStep?: (target: number) => boolean;
   onJumpToStep?: (target: number) => void;
 }) {
@@ -134,7 +136,7 @@ export function Stepper({
       })}
       {/* Out of flow, so it neither takes a row nor picks up the gap. */}
       <span className="sr-only">
-        Step {step} of {total}
+        {locale === "ar" ? `الخطوة ${step} من ${total}` : `Step ${step} of ${total}`}
       </span>
     </div>
   );

@@ -17,6 +17,8 @@ import { SavedProviderKeySelect, useSavedProviderKeys } from "./onboarding/Saved
 import { randomAgentAppearance, resolveAgentAppearance, agentAppearanceSchema } from "@paperclipai/shared";
 import { OnboardingCharacter } from "./onboarding/OnboardingCharacter";
 import { useEffect, useState, useMemo, useRef } from "react";
+import { useTranslation } from "@/i18n";
+import { LanguageSwitcher } from "./LanguageSwitcher";
 import type { ComponentType, CSSProperties } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
@@ -127,6 +129,7 @@ import { useCloudInstance } from "../hooks/useCloudInstance";
 import { PillGuy } from "./onboarding/PillGuy";
 import { SleepingZs } from "./onboarding/SleepingZs";
 import {
+  AGENT_ARC_STEP_LABELS,
   AGENT_ARC_WIZARD_STEPS,
   ONBOARDING_STEP_LABELS,
   ONBOARDING_WIZARD_STEPS,
@@ -498,6 +501,9 @@ function OnboardingWizardInner({
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
+  const { i18n } = useTranslation();
+  const ar = i18n.language.startsWith("ar");
+  const label = (english: string, arabic: string) => ar ? arabic : english;
   const { companyPrefix: matchedCompanyPrefix } = useParams<{ companyPrefix?: string }>();
   // This component renders beside `<Routes>`, not inside it (`App.tsx`), so it
   // has no route match and `useParams()` gives nothing. Read the prefix from
@@ -2574,6 +2580,9 @@ function OnboardingWizardInner({
           className="fixed inset-0 z-50 flex"
           onKeyDown={handleKeyDown}
         >
+          <div className="absolute end-3 top-3 z-20 rounded-lg border border-border bg-background/95 p-1 sm:end-6 sm:top-5">
+            <LanguageSwitcher compact />
+          </div>
           {/* Form column — the wizard opens directly on step 1, so there is no
               front-door choice ahead of it, and it fills the width on every
               step (the mission step's half-width split is gone). */}
@@ -2630,7 +2639,13 @@ function OnboardingWizardInner({
                 <Stepper
                   step={onboardingStepPositionFor(step)}
                   total={ONBOARDING_WIZARD_STEPS.length}
-                  labels={ONBOARDING_STEP_LABELS}
+                  labels={ONBOARDING_STEP_LABELS.map((entry) => label(entry, ({
+                    "Name your organization": "تسمية الشركة",
+                    "Create your first agent": "إنشاء الوكيل الأول",
+                    "Connect a model": "ربط نموذج ذكاء اصطناعي",
+                    "Review": "المراجعة",
+                  } as Record<string, string>)[entry] ?? entry))}
+                  locale={ar ? "ar" : "en"}
                   canJumpToStep={(target) =>
                     canJumpToOnboardingStep({
                       targetStep: ONBOARDING_WIZARD_STEPS[target - 1]!,
@@ -2650,6 +2665,12 @@ function OnboardingWizardInner({
               {showsAgentArcStepper && (
                 <Stepper
                   step={agentArcStepFor(step)!}
+                  labels={AGENT_ARC_STEP_LABELS.map((entry) => label(entry, ({
+                    "Create your first agent": "إنشاء الوكيل الأول",
+                    "Connect a model": "ربط نموذج ذكاء اصطناعي",
+                    "Review": "المراجعة",
+                  } as Record<string, string>)[entry] ?? entry))}
+                  locale={ar ? "ar" : "en"}
                   canJumpToStep={(target) =>
                     canJumpToOnboardingStep({
                       targetStep: AGENT_ARC_WIZARD_STEPS[target - 1]!,
@@ -2719,12 +2740,12 @@ function OnboardingWizardInner({
                       title={
                         <motion.span key={step} {...titleSwapMotion} className="inline-block">
                           {step === 1
-                            ? "What is the name of your organization?"
+                            ? label("What is the name of your organization?", "ما اسم شركتك؟")
                             : step === 3
-                              ? "Create your first agent"
+                              ? label("Create your first agent", "أنشئ وكيلك الذكي الأول")
                               : step === 4
-                                ? "Connect a model"
-                                : "Let's get started..."}
+                                ? label("Connect a model", "اربط نموذج الذكاء الاصطناعي")
+                                : label("Let's get started...", "شركتك جاهزة للانطلاق…")}
                         </motion.span>
                       }
                     />
@@ -2746,8 +2767,8 @@ function OnboardingWizardInner({
                       <p className="pt-2 text-base leading-relaxed text-muted-foreground">
                         <motion.span key={step} {...titleSwapMotion} className="inline-block">
                           {step === 4
-                            ? "Paperclip works with your subscription or API keys."
-                            : `${agentName.trim() || "Your first agent"} is ready to work!`}
+                            ? label("Paperclip works with your subscription or API keys.", "يمكنك استخدام اشتراكك الحالي أو مفتاح API لربط النموذج.")
+                            : label(`${agentName.trim() || "Your first agent"} is ready to work!`, `${agentName.trim() || "وكيلك الأول"} جاهز للعمل!`)}
                         </motion.span>
                       </p>
                     </motion.div>
@@ -2773,11 +2794,11 @@ function OnboardingWizardInner({
               {step === 1 && (
                 <motion.div key="step-1" {...stepContentMotion} exit={stepHandoff ? stepContentMotion.exit : undefined} className="mx-auto flex w-full flex-col gap-9">
                   <div className="flex flex-col gap-2">
-                    <Label htmlFor="onboarding-company-name">Name</Label>
+                    <Label htmlFor="onboarding-company-name">{label("Name", "اسم الشركة")}</Label>
                     <Input
                       id="onboarding-company-name"
                       className="h-(--sz-44px) rounded-lg border-transparent bg-muted shadow-none dark:bg-muted"
-                      placeholder="e.g. Northwind Labs"
+                      placeholder={label("e.g. Northwind Labs", "مثال: شركة النور الرقمية")}
                       value={companyName}
                       onChange={(e) => setCompanyName(e.target.value)}
                       onKeyDown={(e) => {
@@ -2801,7 +2822,7 @@ function OnboardingWizardInner({
               {step === 3 && (
                 <motion.div key="step-3" {...stepContentMotion} exit={stepHandoff ? stepContentMotion.exit : undefined} className="mx-auto flex w-full flex-col gap-9">
                   <div className="flex flex-col gap-2">
-                    <Label htmlFor="onboarding-agent-name">Agent name</Label>
+                    <Label htmlFor="onboarding-agent-name">{label("Agent name", "اسم الوكيل")}</Label>
                     {/*
                       Filled, not outlined, and the column's full width — the
                       same field the naming step before the hand-off draws.
@@ -2814,7 +2835,7 @@ function OnboardingWizardInner({
                     <Input
                       id="onboarding-agent-name"
                       className="h-(--sz-44px) rounded-lg border-transparent bg-muted shadow-none dark:bg-muted"
-                      placeholder="e.g. Chief of staff"
+                      placeholder={label("e.g. Chief of staff", "مثال: المدير التنفيذي")}
                       value={agentName}
                       onChange={(e) => setAgentName(e.target.value)}
                       onKeyDown={(e) => {
@@ -2842,7 +2863,7 @@ function OnboardingWizardInner({
                         Picking one starts the sign-in now. The row is the
                         question, and answering it is what opens the card. */}
                     <ModelSourceTiles
-                      label="Model source"
+                      label={label("Model source", "مصدر النموذج")}
                       sources={recommendedAdapters.map((opt) => ({
                         id: opt.type,
                         label: opt.type === "paperclip_runner" ? "GitHub Copilot" : CONNECT_SOURCE_NAMES[opt.type] ?? opt.label,
@@ -3299,20 +3320,20 @@ function OnboardingWizardInner({
                   // prototype's own local flow draws with "Next".
                   primaryLabel={
                     step === 1
-                      ? "Continue"
+                      ? label("Continue", "متابعة")
                       : step === 5
-                        ? "Get started"
+                        ? label("Get started", "ابدأ العمل")
                         : step === 4
-                          ? connectCta.label
-                          : "Next"
+                          ? label(connectCta.label, ({"Connect":"اتصال","Connecting":"جارٍ الاتصال","Continue":"متابعة","Next":"التالي","Sign in":"تسجيل الدخول","Retry":"إعادة المحاولة"} as Record<string,string>)[connectCta.label] ?? connectCta.label)
+                          : label("Next", "التالي")
                   }
                   primaryIcon={step === 4 ? connectCta.icon : undefined}
                   loadingLabel={
                     step === 1
-                      ? "Creating..."
+                      ? label("Creating...", "جارٍ الإنشاء…")
                       : step === 4
-                        ? "Connecting"
-                        : "Launching..."
+                        ? label("Connecting", "جارٍ الاتصال…")
+                        : label("Launching...", "جارٍ التشغيل…")
                   }
                   // The browser-code login is finished on this screen, so the
                   // button is genuinely busy for its duration and shows it. The

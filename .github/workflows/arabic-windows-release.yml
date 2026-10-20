@@ -1,0 +1,89 @@
+# Publishes ONLY the Arabic build from the fork, never upstream's English installer.
+name: Arabic Desktop - Windows release
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'ui/**'
+      - 'desktop/**'
+      - 'cli/**'
+      - 'server/**'
+      - 'packages/**'
+      - 'pnpm-lock.yaml'
+      - 'package.json'
+      - '.github/workflows/arabic-windows-release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: arabic-desktop-windows-release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.repository != 'paperclipai/paperclip'
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+      - name: Build and test the translated UI
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          pnpm install --frozen-lockfile
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm --filter @paperclipai/plugin-sdk exec tsc
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm --filter @paperclipai/ui typecheck
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm exec vitest run ui/src/i18n/interface-labels.test.ts ui/src/pages/Agents.test.tsx ui/src/pages/Auth.test.tsx --maxWorkers=1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm --filter @paperclipai/ui build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/verify-arabic-continuity.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build the isolated Paperclip Windows runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Published official CLI carries bundled dependencies, including PostgreSQL.
+          npm install --prefix desktop/runtime --omit=dev 'paperclipai@latest'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node desktop/stage-runtime.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node desktop/create-icon.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm install --prefix desktop/launcher
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $version = "0.1.${{ github.run_number }}"
+          npm pkg set "version=$version" --prefix desktop/launcher
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:ELECTRON_BUILDER_COMPRESSION_LEVEL = '1'
+          npm run --prefix desktop/launcher dist:win
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node desktop/validate-windows.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          echo "RELEASE_VERSION=$version" >> $env:GITHUB_ENV
+      - name: Create an Arabic-only GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: arabic-v${{ env.RELEASE_VERSION }}
+          name: Paperclip Arabic ${{ env.RELEASE_VERSION }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            desktop/dist-windows/Paperclip-Arabic-Setup-${{ env.RELEASE_VERSION }}.exe
+            desktop/dist-windows/Paperclip-Arabic-Setup-${{ env.RELEASE_VERSION }}.exe.blockmap
+            desktop/dist-windows/latest.yml

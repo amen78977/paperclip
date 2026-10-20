@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { ToggleGroup } from "radix-ui";
 import { TabsList, TabsTrigger } from "./ui/tabs";
 import { cn } from "@/lib/utils";
+import { useInterfaceLabel } from "@/i18n/interface-labels";
 
 export type TabSize = "compact" | "standard";
 export interface TabBarItem<T extends string = string> {
@@ -18,8 +19,9 @@ interface TabBarProps {
 
 /** Canonical content tabs. Compose inside Tabs with matching TabsContent panels. */
 export function TabBar({ items, size = "standard", label, className }: TabBarProps) {
+  const tr = useInterfaceLabel();
   return <TabsList variant="line" data-canonical-tabs={size} aria-label={label} className={cn("canonical-tab-list", className)}>
-    {items.map(item => <TabsTrigger key={item.value} value={item.value} disabled={item.disabled} className="canonical-tab">{item.label}</TabsTrigger>)}
+    {items.map(item => <TabsTrigger key={item.value} value={item.value} disabled={item.disabled} className="canonical-tab">{typeof item.label === "string" ? tr(item.label) : item.label}</TabsTrigger>)}
   </TabsList>;
 }
 
@@ -32,7 +34,8 @@ export function TabFilters<T extends string>({ items, value, onValueChange, size
   label: string;
   className?: string;
 }) {
+  const tr = useInterfaceLabel();
   return <ToggleGroup.Root type="single" value={value} onValueChange={next => { if (next) onValueChange(next as T); }} data-canonical-tabs={size} aria-label={label} className={cn("canonical-tab-list", className)}>
-    {items.map(item => <ToggleGroup.Item key={item.value} value={item.value} disabled={item.disabled} className="canonical-tab">{item.label}</ToggleGroup.Item>)}
+    {items.map(item => <ToggleGroup.Item key={item.value} value={item.value} disabled={item.disabled} className="canonical-tab">{typeof item.label === "string" ? tr(item.label) : item.label}</ToggleGroup.Item>)}
   </ToggleGroup.Root>;
 }

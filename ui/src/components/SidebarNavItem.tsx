@@ -7,6 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import type { LucideIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { TruncatedText } from "./TruncatedText";
+import { useInterfaceLabel } from "@/i18n/interface-labels";
 
 /**
  * Forces the full-label (non-rail) presentation for any `SidebarNavItem`
@@ -88,6 +89,8 @@ export function SidebarNavItem({
   trailingLabel,
   liveAccessory,
 }: SidebarNavItemProps) {
+  const localize = useInterfaceLabel();
+  const displayLabel = localize(label);
   const { isMobile, setSidebarOpen, collapsed, peeking } = useSidebar();
   // A contextual takeover forces full labels even when the saved global app
   // sidebar preference is collapsed.
@@ -112,7 +115,7 @@ export function SidebarNavItem({
         : undefined;
   const railAriaLabel = !rail || (!railStatusText && !trailingLabel)
     ? undefined
-    : `${label}${railStatusText ? `, ${railStatusText}` : ""}${trailingLabel ? `, ${trailingLabel}` : ""}`;
+    : `${displayLabel}${railStatusText ? `, ${railStatusText}` : ""}${trailingLabel ? `, ${trailingLabel}` : ""}`;
 
   const link = (
     <NavLink
@@ -168,7 +171,7 @@ export function SidebarNavItem({
           )}
         </span>
       ) : null}
-      <TruncatedText className={rail ? SIDEBAR_RAIL_HIDDEN_LABEL : cn("min-w-0 flex-1 truncate", labelClassName)}>{label}</TruncatedText>
+      <TruncatedText className={rail ? SIDEBAR_RAIL_HIDDEN_LABEL : cn("min-w-0 flex-1 truncate", labelClassName)}>{displayLabel}</TruncatedText>
       {!rail && trailing}
       {!rail && textBadge && (
         <Badge variant="ghost"
@@ -226,7 +229,7 @@ export function SidebarNavItem({
       <TooltipTrigger asChild>
         <div>{link}</div>
       </TooltipTrigger>
-      <TooltipContent side="right">{label}</TooltipContent>
+      <TooltipContent side="right">{displayLabel}</TooltipContent>
     </Tooltip>
   );
 }

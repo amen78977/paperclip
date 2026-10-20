@@ -99,3 +99,18 @@ test-results/
 
 # Opt-in CI timing artifacts
 .ci-profile/
+# Locally generated Arabic Windows release and large third-party runtime
+/desktop/runtime/
+/desktop/launcher/node_modules/
+/desktop/launcher/package-lock.json
+/desktop/launcher/electron-install.log
+/desktop/dist-windows/
+/desktop-runtime-install.log
+/install-windows.log
+/ui-build-windows.log
+/ar-tests.log
+/typecheck-ar.log
+/desktop/smoke-test-data/
+/desktop/launcher/build-win-installer.log
+/smoke-runtime.log
+/server-import-smoke.log

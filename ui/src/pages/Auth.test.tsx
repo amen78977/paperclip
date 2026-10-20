@@ -10,6 +10,7 @@ import { queryKeys } from "../lib/queryKeys";
 import { AuthPage } from "./Auth";
 import { CliAuthPage } from "./CliAuth";
 import { ApiError } from "../api/client";
+import { i18n } from "@/i18n";
 
 const getSessionMock = vi.hoisted(() => vi.fn());
 const signInEmailMock = vi.hoisted(() => vi.fn());
@@ -93,7 +94,10 @@ function renderAuthPage(container: HTMLElement) {
 describe("AuthPage", () => {
   let container: HTMLDivElement;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    // Existing authentication contract assertions are written for English;
+    // the desktop edition intentionally starts in Arabic by default.
+    await i18n.changeLanguage("en");
     container = document.createElement("div");
     document.body.appendChild(container);
     getSessionMock.mockResolvedValue(null);
@@ -103,10 +107,24 @@ describe("AuthPage", () => {
     signUpEmailMock.mockResolvedValue(undefined);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     container.remove();
     document.body.innerHTML = "";
     vi.clearAllMocks();
+    await i18n.changeLanguage("ar");
+  });
+
+  it("starts in Arabic when selected and allows switching to English", async () => {
+    await i18n.changeLanguage("ar");
+    const { root } = await mount();
+    expect(container.textContent).toContain("تسجيل الدخول إلى شركتي");
+    expect(document.documentElement.dir).toBe("rtl");
+    const english = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "English");
+    expect(english).toBeDefined();
+    await reactAct(async () => { english?.click(); });
+    expect(container.textContent).toContain("Sign in to Paperclip");
+    expect(document.documentElement.dir).toBe("ltr");
+    await reactAct(async () => { root.unmount(); });
   });
 
   async function mount(path = "/auth") {

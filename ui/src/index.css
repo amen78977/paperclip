@@ -2,6 +2,23 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
+/* Arabic-first desktop layout: natural bidi direction, system Arabic font
+   fallbacks and readable mixed Arabic/Latin identifiers. Do not mirror code. */
+html[dir="rtl"] { font-family: Tahoma, "Segoe UI", Arial, sans-serif; }
+html[dir="rtl"] body { text-align: start; }
+html[dir="rtl"] pre,
+html[dir="rtl"] code,
+html[dir="rtl"] kbd,
+html[dir="rtl"] input[type="email"],
+html[dir="rtl"] input[type="url"],
+html[dir="rtl"] input[type="number"] { direction: ltr; unicode-bidi: isolate; }
+html[dir="rtl"] [data-slot="sidebar-group-label"] { letter-spacing: 0; font-family: Tahoma, "Segoe UI", Arial, sans-serif; }
+html[dir="rtl"] .mobile-bottom-nav { left: 0; right: 0; }
+html[dir="rtl"] .text-left { text-align: right; }
+html[dir="rtl"] .text-right { text-align: left; }
+html[dir="rtl"] .border-r { border-right-width: 0; border-left-width: 1px; }
+html[dir="rtl"] .border-l { border-left-width: 0; border-right-width: 1px; }
+
 /* offline-recovery:start */
 .paperclip-offline {
   --offline-background: #171716;

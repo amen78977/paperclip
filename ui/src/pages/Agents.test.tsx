@@ -11,6 +11,7 @@ import type { BuiltInAgentState } from "../api/builtInAgents";
 import { Agents, filterAgents, filterOrgTree } from "./Agents";
 import { Agents as ProductionAgents } from "./Agents.production";
 import type { AgentOrgChainHealth } from "@paperclipai/shared";
+import { i18n } from "@/i18n";
 
 const mockRouterState = vi.hoisted(() => ({
   pathname: "/agents/all",
@@ -330,7 +331,9 @@ describe("Agents", () => {
   let root: ReturnType<typeof createRoot> | null;
   let queryClient: QueryClient;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    // Existing assertions check English labels; desktop defaults to Arabic.
+    await i18n.changeLanguage("en");
     mockRouterState.pathname = "/agents/all";
     mockRouterState.navigate.mockClear();
     container = document.createElement("div");
@@ -388,6 +391,7 @@ describe("Agents", () => {
     container.remove();
     document.body.innerHTML = "";
     vi.clearAllMocks();
+    await i18n.changeLanguage("ar");
   });
 
   it("filters the rendered roster and clears search without changing its status route", async () => {

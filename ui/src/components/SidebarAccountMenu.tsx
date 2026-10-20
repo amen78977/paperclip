@@ -28,6 +28,8 @@ import { cn, SIDEBAR_RAIL_HIDDEN_LABEL } from "../lib/utils";
 import { ThemeToggle } from "./ThemeToggle";
 import { SidebarServerInfo } from "./SidebarServerInfo";
 import { TruncatedText } from "./TruncatedText";
+import { LanguageSwitcher } from "./LanguageSwitcher";
+import { useInterfaceLabel } from "@/i18n/interface-labels";
 
 const INVITES_PATH = "/company/settings/members?tab=invites";
 const DOCS_URL = "https://docs.paperclip.ing/";
@@ -74,6 +76,7 @@ function MenuAction({
   external = false,
   topLevel = false,
 }: MenuActionProps) {
+  const localize = useInterfaceLabel();
   const className =
     "flex h-(--profile-popover-row-height) w-full items-center gap-(--profile-popover-row-gap) rounded-lg px-2.5 text-left text-(length:--text-compact) font-medium leading-(--profile-popover-label-line-height) text-foreground transition-colors hover:bg-accent";
 
@@ -82,7 +85,7 @@ function MenuAction({
       <span className="flex size-5 shrink-0 items-center justify-center text-muted-foreground">
         <Icon className="size-4" />
       </span>
-      <TruncatedText className="min-w-0 flex-1 truncate">{label}</TruncatedText>
+      <TruncatedText className="min-w-0 flex-1 truncate">{localize(label)}</TruncatedText>
     </>
   );
 
@@ -124,6 +127,7 @@ export function SidebarAccountMenu({
   forceExpanded = false,
   shadow,
 }: SidebarAccountMenuProps) {
+  const localize = useInterfaceLabel();
   const cloud = useCloudInstance();
   const isCloud = Boolean(cloud);
   // Invites live on the Members page (or in Cloud's People settings). Hide the
@@ -160,7 +164,7 @@ export function SidebarAccountMenu({
 
   const displayName = session?.user.name?.trim() || "Board";
   const secondaryLabel =
-    session?.user.email?.trim() || (deploymentMode === "authenticated" ? "Signed in" : "Local workspace board");
+    session?.user.email?.trim() || localize(deploymentMode === "authenticated" ? "Signed in" : "Local workspace board");
   const initials = deriveInitials(displayName);
   const profileHref = userProfilePath(session?.user);
 
@@ -184,7 +188,7 @@ export function SidebarAccountMenu({
                 "flex min-w-0 items-center gap-2.5 rounded-lg text-left text-(length:--text-compact) font-medium text-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                 rail ? "w-full px-3 py-2" : "flex-1 px-2 py-1.5",
               )}
-              aria-label="Open account menu"
+              aria-label={localize("Open account menu")}
             >
               <Avatar size="sm">
                 {session?.user.image ? <AvatarImage src={session.user.image} alt={displayName} /> : null}
@@ -195,7 +199,7 @@ export function SidebarAccountMenu({
           </PopoverTrigger>
           <FlyoutContent
             shadow={shadow}
-            aria-label="Account"
+            aria-label={localize("Account")}
             side="top"
             align="start"
             sideOffset={10}
@@ -205,7 +209,7 @@ export function SidebarAccountMenu({
             <FlyoutHeader data-flyout-profile data-marquee-surface className="relative flex h-(--profile-popover-header-height) shrink-0 items-center gap-2.5 px-3.5">
               <Link
                 to={profileHref}
-                aria-label="View profile"
+                aria-label={localize("View profile")}
                 onClick={closeNavigationChrome}
                 className="absolute inset-0 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
               />
@@ -259,6 +263,7 @@ export function SidebarAccountMenu({
                 onClick={() => setOpen(false)}
               />
               <ThemeToggle variant="compact-menu-action" onAfterToggle={() => setOpen(false)} />
+              <LanguageSwitcher />
               {deploymentMode === "authenticated" ? (
                 <button
                   type="button"
@@ -273,7 +278,7 @@ export function SidebarAccountMenu({
                     <LogOut className="size-4" />
                   </span>
                   <TruncatedText className="min-w-0 flex-1 truncate">
-                    {signOutMutation.isPending ? "Signing out..." : "Sign out"}
+                    {localize(signOutMutation.isPending ? "Signing out..." : "Sign out")}
                   </TruncatedText>
                 </button>
               ) : null}
@@ -288,13 +293,13 @@ export function SidebarAccountMenu({
                 href={FEEDBACK_URL}
                 target="_blank"
                 rel="noreferrer"
-                aria-label="Share feedback"
+                aria-label={localize("Share feedback")}
                 className="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground/50 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <Flag className="h-4 w-4" aria-hidden="true" />
               </a>
             </TooltipTrigger>
-            <TooltipContent side="top">Share feedback</TooltipContent>
+            <TooltipContent side="top">{localize("Share feedback")}</TooltipContent>
           </Tooltip>
         ) : null}
       </div>

@@ -93,6 +93,9 @@ export function linkSdkInto(packageDir) {
     if (error?.code !== "ENOENT") throw error;
   }
 
-  symlinkSync(relativeSdkDir, linkTarget, "dir");
+  // Windows often disallows directory symlinks without Developer Mode or
+  // elevation; junctions work for ordinary users and preserve the same target.
+  symlinkSync(process.platform === "win32" ? sdkDir : relativeSdkDir, linkTarget,
+    process.platform === "win32" ? "junction" : "dir");
   return true;
 }

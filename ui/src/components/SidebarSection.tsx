@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { useSidebarNavExpanded } from "./SidebarNavItem";
+import { useInterfaceLabel } from "@/i18n/interface-labels";
 
 type SidebarSectionIcon = ComponentType<{ className?: string }>;
 
@@ -69,6 +70,7 @@ function SidebarSectionHeader({
   label,
   menu,
 }: Pick<SidebarSectionProps, "collapsible" | "headerAction" | "label" | "menu">) {
+  const localize = useInterfaceLabel();
   const { isMobile } = useSidebar();
   const [menuOpen, setMenuOpen] = useState(false);
   const hasMenu = Boolean(
@@ -88,7 +90,7 @@ function SidebarSectionHeader({
     "h-5 w-5 shrink-0 text-muted-foreground/60 transition-opacity hover:text-foreground data-[state=open]:opacity-100",
     headerControlVisibilityClassName,
   );
-  const headerContent = <span data-slot="sidebar-group-label" className={labelClassName}>{label}</span>;
+  const headerContent = <span data-slot="sidebar-group-label" className={labelClassName}>{localize(label)}</span>;
   const HeaderActionIcon = headerAction?.icon;
 
   const headingControl = hasMenu ? (
@@ -159,7 +161,7 @@ function SidebarSectionHeader({
             <button
               type="button"
               data-slot="icon-button"
-              className="absolute -left-4 flex h-5 w-5 items-center justify-center rounded-sm outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+              className="absolute -start-4 flex h-5 w-5 items-center justify-center rounded-sm outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
               aria-label={collapsible.open ? `Collapse ${label}` : `Expand ${label}`}
             >
               <ChevronRight className={caretClassName} aria-hidden="true" />

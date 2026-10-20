@@ -1,0 +1,96 @@
+# Intended for the OWNER'S fork of paperclipai/paperclip only.
+# Sync official upstream daily without ever dropping the Arabic customizations.
+# A conflicting or untested upstream change is NOT installed or published.
+name: Arabic Desktop - upstream updates
+
+on:
+  schedule:
+    - cron: '23 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: arabic-desktop-upstream-main
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    # The original Paperclip project must not execute this fork-only workflow.
+    if: github.repository != 'paperclipai/paperclip'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Compare official Paperclip with the Arabic edition
+        id: compare
+        shell: bash
+        run: |
+          set -euo pipefail
+          git remote add official https://github.com/paperclipai/paperclip.git
+          git fetch --no-tags official master
+          if git merge-base --is-ancestor FETCH_HEAD HEAD; then
+            echo 'up_to_date=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'up_to_date=false' >> "$GITHUB_OUTPUT"
+          fi
+      - uses: pnpm/action-setup@v4
+        if: steps.compare.outputs.up_to_date == 'false'
+        with:
+          version: 9.15.4
+      - uses: actions/setup-node@v4
+        if: steps.compare.outputs.up_to_date == 'false'
+        with:
+          node-version: '24'
+          cache: pnpm
+      - name: Merge upstream into the Arabic source
+        if: steps.compare.outputs.up_to_date == 'false'
+        id: merge
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if git merge --no-edit --no-ff official/master -m 'chore(arabic): integrate official Paperclip updates'; then
+            echo 'success=true' >> "$GITHUB_OUTPUT"
+          else
+            git merge --abort || true
+            echo 'success=false' >> "$GITHUB_OUTPUT"
+            echo 'Upstream changed files conflict with the Arabic edition. No updates were published.'
+          fi
+      - name: Validate the Arabic language and main screens
+        if: steps.merge.outputs.success == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile
+          pnpm --filter @paperclipai/plugin-sdk exec tsc
+          pnpm --filter @paperclipai/ui typecheck
+          pnpm exec vitest run ui/src/i18n/interface-labels.test.ts ui/src/pages/Agents.test.tsx ui/src/pages/Auth.test.tsx --maxWorkers=1
+          pnpm --filter @paperclipai/ui build
+          node scripts/verify-arabic-continuity.mjs
+      - name: Update the fork only after all checks pass
+        if: steps.merge.outputs.success == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Never force-push; concurrent changes or branch protection fail closed.
+          git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)" push origin HEAD:refs/heads/master
+      - name: Open or retain an issue if manual reconciliation is required
+        if: failure() || steps.merge.outputs.success == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          title='Arabic Desktop: official Paperclip update needs repair'
+          count=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "$title in:title" --json number --jq 'length') || count=1
+          if [ "$count" = 0 ]; then
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "The automatic upstream integration did not pass. Arabic customizations and installed versions were preserved. Inspect run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          fi

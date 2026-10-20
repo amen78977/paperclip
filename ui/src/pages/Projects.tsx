@@ -24,6 +24,7 @@ import { ProjectsToolbar, type ProjectSortField, type ProjectSortDir } from "@/c
 import { Hexagon } from "lucide-react";
 import { Lock } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { useInterfaceLabel } from "@/i18n/interface-labels";
 
 function compareProjectNames(left: Project, right: Project) {
   const nameDiff = left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
@@ -67,6 +68,7 @@ function sortProjects(projects: Project[], sortField: ProjectSortField, sortDir:
 }
 
 export function Projects() {
+  const tr = useInterfaceLabel();
   const { selectedCompanyId } = useCompany();
   const { openNewProject } = useDialogActions();
   const { setBreadcrumbs } = useBreadcrumbs();
@@ -116,7 +118,7 @@ export function Projects() {
   }, [membershipsQuery.data, sortedProjects]);
 
   if (!selectedCompanyId) {
-    return <EmptyState icon={Hexagon} message="Select an organization to view projects." />;
+    return <EmptyState icon={Hexagon} message={tr("Select an organization to view projects.")} />;
   }
 
   if (isLoading) {
@@ -133,13 +135,13 @@ export function Projects() {
       {!isLoading && projects.length === 0 && (
         <EmptyState
           icon={Hexagon}
-          message="No projects yet."
-          action="Add Project"
+          message={tr("No projects yet.")}
+          action={tr("Add Project")}
           onAction={openNewProject}
         />
       )}
 
-      {projects.length > 0 && sortedProjects.length === 0 && <p className="text-sm text-muted-foreground">No projects match your search.</p>}
+      {projects.length > 0 && sortedProjects.length === 0 && <p className="text-sm text-muted-foreground">{tr("No projects match your search.")}</p>}
 
       {sortedProjects.length > 0 && (
         <div className="space-y-6">
@@ -152,9 +154,9 @@ export function Projects() {
             return (
               <section key={label} className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-sm font-medium">{label}</h2>
+                  <h2 className="text-sm font-medium">{tr(label)}</h2>
                   <span className="text-xs text-muted-foreground">
-                    {sectionProjects.length} project{sectionProjects.length === 1 ? "" : "s"}
+                    {sectionProjects.length} {tr(sectionProjects.length === 1 ? "project" : "projects")}
                   </span>
                 </div>
                 <Card className="block py-0 overflow-hidden divide-y divide-border">

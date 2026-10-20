@@ -13,10 +13,15 @@ import { AsciiArtAnimation } from "@/components/AsciiArtAnimation";
 import { PaperclipLoading } from "@/components/AnimatedPaperclipIcon";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { PaperclipLockup } from "../components/PaperclipLockup";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { useTranslation } from "@/i18n";
 
 type AuthMode = "sign_in" | "sign_up";
 
 export function AuthPage() {
+  const { i18n } = useTranslation();
+  const ar = i18n.language.startsWith("ar");
+  const label = (english: string, arabic: string) => ar ? arabic : english;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -73,7 +78,7 @@ export function AuthPage() {
       navigate(nextPath, { replace: true });
     },
     onError: (err) => {
-      setError(err instanceof Error ? err.message : "Authentication failed");
+      setError(err instanceof Error ? err.message : label("Authentication failed", "تعذّر تسجيل الدخول"));
     },
   });
 
@@ -92,7 +97,7 @@ export function AuthPage() {
 
   // A health/session failure must not be mistaken for a self-hosted instance.
   if (healthQuery.error || sessionError) {
-    return <p role="alert" className="p-6 text-sm text-destructive">Unable to check sign-in. Refresh and try again.</p>;
+    return <p role="alert" className="p-6 text-sm text-destructive">{label("Unable to check sign-in. Refresh and try again.", "تعذّر التحقق من تسجيل الدخول. حدّث الصفحة وحاول مجددًا.")}</p>;
   }
 
   if (healthQuery.data?.cloud) {
@@ -101,7 +106,8 @@ export function AuthPage() {
 
   return (
     <div className="fixed inset-0 flex bg-background">
-      <div className="absolute top-4 right-4 z-10">
+      <div className="absolute top-4 end-4 z-10 flex items-center gap-2 rounded-lg bg-background/90 p-1">
+        <LanguageSwitcher compact />
         <ThemeToggle />
       </div>
       {/* Left half — form */}
@@ -112,12 +118,12 @@ export function AuthPage() {
           </div>
 
           <h1 className="text-xl font-semibold">
-            {mode === "sign_in" ? "Sign in to Paperclip" : "Create your Paperclip account"}
+            {mode === "sign_in" ? label("Sign in to Paperclip", "تسجيل الدخول إلى شركتي") : label("Create your Paperclip account", "إنشاء حساب شركتي")}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {mode === "sign_in"
-              ? "Use your email and password to access this instance."
-              : "Create an account for this instance. Email confirmation is not required in v1."}
+              ? label("Use your email and password to access this instance.", "أدخل بريدك الإلكتروني وكلمة المرور للوصول إلى شركتك.")
+              : label("Create an account for this instance. Email confirmation is not required in v1.", "أنشئ حسابًا لهذا التطبيق. لا يلزم تأكيد البريد الإلكتروني في هذه النسخة.")}
           </p>
 
           <form
@@ -128,7 +134,7 @@ export function AuthPage() {
               event.preventDefault();
               if (mutation.isPending) return;
               if (!canSubmit) {
-                setError("Please fill in all required fields.");
+                setError(label("Please fill in all required fields.", "يرجى تعبئة جميع الحقول المطلوبة."));
                 return;
               }
               mutation.mutate();
@@ -136,7 +142,7 @@ export function AuthPage() {
           >
             {mode === "sign_up" && (
               <div>
-                <label htmlFor="name" className="text-xs text-muted-foreground mb-1 block">Name</label>
+                <label htmlFor="name" className="text-xs text-muted-foreground mb-1 block">{label("Name", "الاسم")}</label>
                 <input
                   id="name"
                   name="name"
@@ -153,7 +159,7 @@ export function AuthPage() {
               </div>
             )}
             <div>
-              <label htmlFor="email" className="text-xs text-muted-foreground mb-1 block">Email</label>
+              <label htmlFor="email" className="text-xs text-muted-foreground mb-1 block">{label("Email", "البريد الإلكتروني")}</label>
               <input
                 id="email"
                 name="email"
@@ -170,7 +176,7 @@ export function AuthPage() {
               />
             </div>
             <div>
-              <label htmlFor="password" className="text-xs text-muted-foreground mb-1 block">Password</label>
+              <label htmlFor="password" className="text-xs text-muted-foreground mb-1 block">{label("Password", "كلمة المرور")}</label>
               <input
                 id="password"
                 name="password"
@@ -197,15 +203,15 @@ export function AuthPage() {
               className={`w-full ${!canSubmit && !mutation.isPending ? "opacity-50" : ""}`}
             >
               {mutation.isPending
-                ? "Working…"
+                ? label("Working…", "جارٍ التنفيذ…")
                 : mode === "sign_in"
-                  ? "Sign In"
-                  : "Create Account"}
+                  ? label("Sign In", "تسجيل الدخول")
+                  : label("Create Account", "إنشاء الحساب")}
             </Button>
           </form>
 
           <div className="mt-5 text-sm text-muted-foreground">
-            {mode === "sign_in" ? "Need an account?" : "Already have an account?"}{" "}
+            {mode === "sign_in" ? label("Need an account?", "ليس لديك حساب؟") : label("Already have an account?", "لديك حساب بالفعل؟")}{" "}
             <button
               type="button"
               className="font-medium text-foreground underline underline-offset-2"
@@ -214,7 +220,7 @@ export function AuthPage() {
                 setMode(mode === "sign_in" ? "sign_up" : "sign_in");
               }}
             >
-              {mode === "sign_in" ? "Create one" : "Sign in"}
+              {mode === "sign_in" ? label("Create one", "أنشئ حسابًا") : label("Sign in", "سجّل الدخول")}
             </button>
           </div>
         </div>

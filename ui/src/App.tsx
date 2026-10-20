@@ -4,6 +4,7 @@ import type { ToolConnectionCredentialSource } from "@paperclipai/shared";
 import { Navigate, Outlet, Route, Routes, useActiveCompanyPrefix, useLocation, useParams } from "@/lib/router";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/i18n";
+import { useInterfaceLabel } from "@/i18n/interface-labels";
 import { Layout } from "./components/Layout";
 import { ConferenceRoomChatGate } from "./components/ConferenceRoomChatGate";
 import { CasesExperimentalGate } from "./components/CasesExperimentalGate";
@@ -566,6 +567,7 @@ export function OnboardingRoutePage() {
   const { companies } = useCompany();
   const { openOnboarding } = useDialogActions();
   const { t } = useTranslation();
+  const localize = useInterfaceLabel();
   const cloudInstance = useCloudInstance();
   const createStackUrl = cloudStackCreateUrl(cloudInstance?.cloudBaseUrl ?? null);
   const { onboardingOpen, onboardingRouteDismissed } = useDialogState();
@@ -583,15 +585,15 @@ export function OnboardingRoutePage() {
   }
 
   const title = matchedCompany
-    ? `Add another agent to ${matchedCompany.name}`
+    ? `${localize("Add agent")} — ${matchedCompany.name}`
     : companies.length > 0
-      ? "Create another organization"
-      : "Create your first organization";
+      ? localize("Create another organization")
+      : localize("Create your first organization");
   const description = matchedCompany
-    ? "Run onboarding again to add an agent and a starter task for this organization."
+    ? localize("Run onboarding again to add an agent and a starter task for this organization.")
     : companies.length > 0
-      ? "Run onboarding again to create another organization and seed its first agent."
-      : "Get started by creating an organization and your first agent.";
+      ? localize("Run onboarding again to create another organization and seed its first agent.")
+      : localize("Get started by creating an organization and your first agent.");
 
   return (
     <div className="mx-auto max-w-xl py-10">
@@ -629,7 +631,7 @@ export function OnboardingRoutePage() {
                     : openOnboarding()
               }
             >
-              {matchedCompany ? "Add Agent" : "Start Onboarding"}
+              {matchedCompany ? localize("Add Agent") : localize("Start Onboarding")}
             </Button>
           )}
         </div>
