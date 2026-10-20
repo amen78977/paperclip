@@ -107,6 +107,7 @@ test-results/
 /desktop/dist-windows/
 /desktop/dist-next/
 /desktop/*.log
+/desktop/**/*.log
 /desktop-runtime-install.log
 /install-windows.log
 /ui-build-windows.log
