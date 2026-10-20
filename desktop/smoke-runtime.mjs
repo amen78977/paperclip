@@ -1,12 +1,17 @@
 /** Isolated Windows smoke, never touches the user's ~/.paperclip data. */
 import { spawn } from "node:child_process";
-import { mkdirSync, existsSync } from "node:fs";
+import { mkdirSync, existsSync, mkdtempSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const runtime = path.join(root, "desktop", "runtime");
-const dataDir = path.join(root, "desktop", "smoke-test-data");
+// Windows GitHub runners cannot reliably chmod checkout folders during
+// PostgreSQL initdb ("fixing permissions on existing directory" fails).
+// Create a fresh, owned, isolated cluster in the user's temporary directory.
+// This never touches an existing Paperclip database or smoke-test-data folder.
+const dataDir = mkdtempSync(path.join(os.tmpdir(), "paperclip-arabic-smoke-"));
 const cli = path.join(runtime, "node_modules", "paperclipai", "dist", "index.js");
 const node = path.join(runtime, "node.exe");
 const port = 31288;
