@@ -11,6 +11,7 @@ on:
 permissions:
   contents: write
   issues: write
+  actions: write
 
 concurrency:
   group: arabic-desktop-upstream-main
@@ -83,6 +84,27 @@ jobs:
           set -euo pipefail
           # Never force-push; concurrent changes or branch protection fail closed.
           git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)" push origin HEAD:refs/heads/master
+      - name: Keep unrelated upstream CI disabled in the personal fork
+        if: steps.merge.outputs.success == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          # The official project has extensive CI; this fork needs ONLY the
+          # Arabic build/update checks. New upstream workflows may appear.
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows?per_page=100" \
+            --jq '.workflows[] | select(.path | test("/arabic-(upstream-sync|windows-release)\\.yml$") | not) | .id' \
+            | while read -r id; do
+                [ -z "$id" ] || gh api -X PUT "repos/$GITHUB_REPOSITORY/actions/workflows/$id/disable"
+              done
+      # A GITHUB_TOKEN push does not trigger normal `on: push` workflows.
+      # workflow_dispatch IS a supported exception: explicitly request a build.
+      - name: Dispatch the verified Arabic Windows build
+        if: steps.merge.outputs.success == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: gh workflow run arabic-windows-release.yml --repo "$GITHUB_REPOSITORY" --ref master
       - name: Open or retain an issue if manual reconciliation is required
         if: failure() || steps.merge.outputs.success == 'false'
         env:
