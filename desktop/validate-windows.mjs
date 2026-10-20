@@ -4,7 +4,13 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 
 const root = path.resolve(import.meta.dirname, "..");
-const dist = path.join(root, "desktop", "dist-windows");
+const outputIndex = process.argv.indexOf("--output");
+if (outputIndex !== -1 && !process.argv[outputIndex + 1]) {
+  throw new Error("--output requires a directory");
+}
+const dist = outputIndex === -1
+  ? path.join(root, "desktop", "dist-windows")
+  : path.resolve(process.argv[outputIndex + 1]);
 const extracted = path.join(dist, "win-unpacked");
 const runtime = path.join(extracted, "resources", "runtime");
 const installer = path.join(dist, "Paperclip-Arabic-Setup-0.1.0.exe");

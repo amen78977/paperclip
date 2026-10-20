@@ -105,6 +105,7 @@ test-results/
 /desktop/launcher/package-lock.json
 /desktop/launcher/electron-install.log
 /desktop/dist-windows/
+/desktop/dist-next/
 /desktop-runtime-install.log
 /install-windows.log
 /ui-build-windows.log
