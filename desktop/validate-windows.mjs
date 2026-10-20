@@ -13,7 +13,12 @@ const dist = outputIndex === -1
   : path.resolve(process.argv[outputIndex + 1]);
 const extracted = path.join(dist, "win-unpacked");
 const runtime = path.join(extracted, "resources", "runtime");
-const installer = path.join(dist, "Paperclip-Arabic-Setup-0.1.0.exe");
+const launcherPkg = JSON.parse(readFileSync(path.join(root, "desktop", "launcher", "package.json"), "utf8"));
+const launcherVersion = launcherPkg.version;
+if (typeof launcherVersion !== "string" || !/^\d+\.\d+\.\d+$/.test(launcherVersion)) {
+  throw new Error("Invalid launcher version; cannot identify the expected release installer.");
+}
+const installer = path.join(dist, `Paperclip-Arabic-Setup-${launcherVersion}.exe`);
 const portableOnly = process.argv.includes("--portable");
 const mandatory = {
   "Electron application": path.join(extracted, "Paperclip Arabic.exe"),
