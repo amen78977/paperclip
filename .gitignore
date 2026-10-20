@@ -106,6 +106,7 @@ test-results/
 /desktop/launcher/electron-install.log
 /desktop/dist-windows/
 /desktop/dist-next/
+/desktop/*.log
 /desktop-runtime-install.log
 /install-windows.log
 /ui-build-windows.log
