@@ -26,6 +26,7 @@ const mandatory = {
   "Node.js v24": path.join(runtime, "node.exe"),
   "Paperclip CLI": path.join(runtime, "node_modules", "paperclipai", "dist", "index.js"),
   "Paperclip server": path.join(runtime, "node_modules", "@paperclipai", "server", "dist", "index.js"),
+  "Hoisted Teams Graph runtime": path.join(runtime, "node_modules", "@microsoft", "teams.graph-endpoints", "package.json"),
   "Embedded PostgreSQL": path.join(runtime, "node_modules", "@embedded-postgres", "windows-x64", "native", "bin", "postgres.exe"),
   "Arabic web UI": path.join(runtime, "node_modules", "@paperclipai", "server", "ui-dist", "index.html"),
   ...(!portableOnly ? { "Windows installer": installer } : {}),
@@ -39,6 +40,9 @@ for (const [label, filename] of Object.entries(mandatory)) {
 }
 if (!readFileSync(mandatory["Arabic web UI"], "utf8").includes('lang="ar"')) {
   throw new Error("Missing Arabic-first UI in packaged server.");
+}
+if (existsSync(path.join(runtime, "node_modules", "@paperclipai", "server", "node_modules", "@microsoft", "teams.graph-endpoints"))) {
+  throw new Error("Deeply nested Teams Graph package remains: NSIS will omit required Windows files.");
 }
 if (!portableOnly && statSync(installer).size < 30_000_000) {
   throw new Error("Installer is suspiciously small, likely missing the runtime.");

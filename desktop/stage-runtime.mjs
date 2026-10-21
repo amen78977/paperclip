@@ -2,7 +2,7 @@
  * Run from the repository root: node desktop/stage-runtime.mjs
  * Does not edit the user's current Paperclip installation or personal data.
  */
-import { cpSync, copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
@@ -23,6 +23,46 @@ copyFileSync(process.execPath, path.join(runtime, "node.exe"));
 // Overlay the customized UI on the published server's static resource tree.
 // Assets retain their content-hash names; stale files are harmless.
 cpSync(builtUI, publishedUI, { recursive: true, force: true });
+// The official server has a very deeply nested Microsoft Graph endpoints
+// dependency. NSIS silently skips files whose *installed absolute path* is
+// longer than the Windows legacy MAX_PATH limit, even when the build/CI smoke
+// passes from a shorter checkout path. Hoist this otherwise-unique package to
+// runtime/node_modules so that Node's ordinary ancestor resolution still
+// finds it without creating >260-character installed paths.
+const installedModules = path.join(runtime, "node_modules");
+const graphNested = path.join(installedModules, "@paperclipai", "server", "node_modules", "@microsoft", "teams.graph-endpoints");
+const graphHoisted = path.join(installedModules, "@microsoft", "teams.graph-endpoints");
+if (existsSync(graphNested)) {
+  if (existsSync(graphHoisted)) {
+    throw new Error("Microsoft Graph endpoints is installed twice; review version compatibility before hoisting.");
+  }
+  mkdirSync(path.dirname(graphHoisted), { recursive: true });
+  renameSync(graphNested, graphHoisted);
+  console.log("Hoisted Microsoft Teams Graph endpoints to keep NSIS installed paths safe");
+} else if (!existsSync(path.join(graphHoisted, "package.json"))) {
+  throw new Error("Cannot find Microsoft Teams Graph endpoints dependency in published runtime.");
+}
+// Checking the staging path itself is not enough: GitHub's build directory is
+// often shorter than a real per-user NSIS installation directory. Prevent a
+// release that silently drops files during extraction under the standard path.
+const expectedInstalledModules = path.join(
+  process.env.LOCALAPPDATA || path.join(process.env.USERPROFILE || "C:\\Users\\runneradmin", "AppData", "Local"),
+  "Programs", "Paperclip Arabic", "resources", "runtime", "node_modules",
+);
+let longestInstalledPath = "";
+const scanInstalledPaths = (directory, relative = "") => {
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const next = path.join(relative, entry.name);
+    const futurePath = path.join(expectedInstalledModules, next);
+    if (futurePath.length > longestInstalledPath.length) longestInstalledPath = futurePath;
+    if (entry.isDirectory()) scanInstalledPaths(path.join(directory, entry.name), next);
+  }
+};
+scanInstalledPaths(installedModules);
+if (longestInstalledPath.length >= 260) {
+  throw new Error(`Packaged module will exceed Windows MAX_PATH at default install location (${longestInstalledPath.length} chars): ${longestInstalledPath}`);
+}
+console.log(`PASS simulated installed Windows path lengths (longest ${longestInstalledPath.length}/259)`);
 // The published Paperclip adapter currently creates directory symlinks without
 // telling Node they are directories. Ordinary Windows accounts cannot create
 // those links (EPERM), whereas directory junctions work without admin rights.
