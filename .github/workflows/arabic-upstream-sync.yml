@@ -90,12 +90,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          # The official project has extensive CI; this fork needs ONLY the
-          # Arabic build/update checks. New upstream workflows may appear.
+          set -euo pipefail
+          # GitHub returns HTTP 403 when asked to disable an ALREADY disabled
+          # workflow. Only disable active workflows; never fail an otherwise
+          # verified and committed upstream sync for that benign condition.
           gh api "repos/$GITHUB_REPOSITORY/actions/workflows?per_page=100" \
-            --jq '.workflows[] | select(.path | test("/arabic-(upstream-sync|windows-release)\\.yml$") | not) | .id' \
+            --jq '.workflows[] | select(.state == "active") | select(.path | test("/arabic-(upstream-sync|windows-release)\\.yml$") | not) | .id' \
             | while read -r id; do
-                [ -z "$id" ] || gh api -X PUT "repos/$GITHUB_REPOSITORY/actions/workflows/$id/disable"
+                [ -z "$id" ] || gh api -X PUT "repos/$GITHUB_REPOSITORY/actions/workflows/$id/disable" || echo "::warning::Could not disable upstream workflow $id. Review fork permissions."
               done
       # A GITHUB_TOKEN push does not trigger normal `on: push` workflows.
       # workflow_dispatch IS a supported exception: explicitly request a build.
@@ -111,8 +113,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
+          # Personal forks may have Issues disabled. Failure diagnostics must
+          # remain visible in the job summary regardless of that setting.
           title='Arabic Desktop: official Paperclip update needs repair'
-          count=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "$title in:title" --json number --jq 'length') || count=1
+          echo "### $title" >> "$GITHUB_STEP_SUMMARY"
+          echo "Review run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >> "$GITHUB_STEP_SUMMARY"
+          count=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "$title in:title" --json number --jq 'length' 2>/dev/null) || count=1
           if [ "$count" = 0 ]; then
-            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "The automatic upstream integration did not pass. Arabic customizations and installed versions were preserved. Inspect run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "The automatic upstream integration did not pass. Arabic customizations and installed versions were preserved. Inspect run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" || echo '::warning::GitHub Issues are unavailable; failure recorded in the job summary.'
           fi
