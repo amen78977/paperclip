@@ -13,7 +13,12 @@ $smokeScript = Join-Path $PSScriptRoot 'smoke-runtime.mjs'
 $node = (Get-Command node.exe -ErrorAction Stop).Source
 $created = $false
 try {
-  $secret = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(30)) + 'aA1!'
+  # PowerShell 5.1 runs on .NET Framework: GetBytes(int) static overload is
+  # unavailable, unlike newer PowerShell/.NET. Fill a cryptographic byte array.
+  $randomBytes = New-Object byte[] 30
+  $generator = [Security.Cryptography.RandomNumberGenerator]::Create()
+  try { $generator.GetBytes($randomBytes) } finally { $generator.Dispose() }
+  $secret = [Convert]::ToBase64String($randomBytes) + 'aA1!'
   $secure = ConvertTo-SecureString $secret -AsPlainText -Force
   $credentials = [System.Management.Automation.PSCredential]::new($account, $secure)
   New-LocalUser -Name $userName -Password $secure -Description 'Temporary non-admin Paperclip CI smoke user' -AccountNeverExpires | Out-Null
