@@ -28,6 +28,16 @@ try {
   New-Item -ItemType Directory -Path $logDir -Force | Out-Null
   & icacls.exe $logDir /grant "${account}:(OI)(CI)M" | Out-Null
   if ($LASTEXITCODE -ne 0) { throw 'Unable to grant the smoke user write access to its test log directory.' }
+  # The embedded PostgreSQL bootstrap invokes fs.chmod() on postgres.exe.
+  # GitHub Actions checks the binary out as runneradmin, so a normal account
+  # can execute it but cannot chmod it. Scope modify access to this temporary
+  # CI build's bundled PostgreSQL bin folder, not the checkout or user data.
+  $postgresBin = Join-Path $projectDir 'desktop\runtime\node_modules\@embedded-postgres\windows-x64\native\bin'
+  if (-not (Test-Path (Join-Path $postgresBin 'postgres.exe'))) {
+    throw 'Embedded PostgreSQL executable missing from the smoke test runtime.'
+  }
+  & icacls.exe $postgresBin /grant "${account}:(OI)(CI)M" /T | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw 'Unable to grant the smoke user modify access to bundled PostgreSQL executables.' }
   $stdout = Join-Path $logDir 'stdout.txt'
   $stderr = Join-Path $logDir 'stderr.txt'
   $p = Start-Process -FilePath $node -ArgumentList @("`"$smokeScript`"") `
