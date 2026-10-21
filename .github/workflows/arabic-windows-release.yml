@@ -67,6 +67,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm install --prefix desktop/launcher
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node --test desktop/launcher/update-watch.test.cjs desktop/launcher/auto-update.test.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $version = "0.1.${{ github.run_number }}"
           npm pkg set "version=$version" --prefix desktop/launcher
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

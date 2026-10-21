@@ -1,6 +1,7 @@
 /** Release integrity check. Prevents shipping a "working" EXE lacking server. */
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { createRequire } from "node:module";
 import path from "node:path";
 
 const root = path.resolve(import.meta.dirname, "..");
@@ -23,6 +24,7 @@ const portableOnly = process.argv.includes("--portable");
 const mandatory = {
   "Electron application": path.join(extracted, "Paperclip Arabic.exe"),
   "Electron app.asar": path.join(extracted, "resources", "app.asar"),
+  "Electron update feed": path.join(extracted, "resources", "app-update.yml"),
   "Node.js v24": path.join(runtime, "node.exe"),
   "Paperclip CLI": path.join(runtime, "node_modules", "paperclipai", "dist", "index.js"),
   "Paperclip server": path.join(runtime, "node_modules", "@paperclipai", "server", "dist", "index.js"),
@@ -38,6 +40,21 @@ for (const [label, filename] of Object.entries(mandatory)) {
   }
   console.log(`PASS ${label}`);
 }
+const feed = readFileSync(mandatory["Electron update feed"], "utf8");
+if (!/provider:\s*github/.test(feed) || !/owner:\s*amen78977/.test(feed) || !/repo:\s*paperclip/.test(feed)) {
+  throw new Error("Electron update feed is not bound to the Arabic GitHub repository.");
+}
+// Verify the actual packaged Electron main archive includes its production
+// updater dependencies (not only the dev checkout's node_modules).
+const launcherRequire = createRequire(path.join(root, "desktop", "launcher", "package.json"));
+const { listPackage } = launcherRequire("@electron/asar");
+const packedFiles = listPackage(mandatory["Electron app.asar"]).map((p) => p.replaceAll("\\", "/"));
+for (const required of ["/auto-update.cjs", "/update-watch.cjs", "/node_modules/electron-updater/out/main.js"]) {
+  if (!packedFiles.some((p) => p.endsWith(required))) {
+    throw new Error(`Missing critical auto-update module from the real Electron app.asar: ${required}`);
+  }
+}
+console.log("PASS verified automatic updater and Arabic-only GitHub release feed in packaged app");
 if (!readFileSync(mandatory["Arabic web UI"], "utf8").includes('lang="ar"')) {
   throw new Error("Missing Arabic-first UI in packaged server.");
 }

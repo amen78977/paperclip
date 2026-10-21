@@ -1,11 +1,12 @@
 "use strict";
 
-const { app, BrowserWindow, dialog, shell } = require("electron");
+const { app, BrowserWindow, dialog, shell, powerMonitor } = require("electron");
+const { autoUpdater } = require("electron-updater");
 const { spawn } = require("node:child_process");
-const { existsSync, readFileSync } = require("node:fs");
+const { existsSync, readFileSync, appendFileSync, mkdirSync } = require("node:fs");
 const path = require("node:path");
 const http = require("node:http");
-const { RETRY_AFTER_MS, isNewerVersion, getLatestRelease } = require("./update-watch.cjs");
+const { startAutomaticUpdates } = require("./auto-update.cjs");
 
 // A dedicated port prevents this app from hijacking the existing user's
 // standard Paperclip instance on port 3100.
@@ -19,29 +20,18 @@ const START_TIMEOUT_MS = 480_000;
 let serverChild = null;
 let window = null;
 let shuttingDown = false;
-let updateTimer = null;
-let lastNotifiedRelease = null;
+let automaticUpdates = null;
 
-async function checkArabicUpdates() {
-  if (shuttingDown || !window || window.isDestroyed()) return;
+function logUpdateEvent(event, detail) {
+  // Log short non-secret diagnostics in our own userData; do not log headers,
+  // user prompts, database content or raw authorization exceptions.
+  const safeEvent = String(event).replace(/[^a-z_]/gi, "_").slice(0, 55);
+  const safeDetail = /^[0-9]+\.[0-9]+\.[0-9]+$/.test(detail || "") ? detail : "";
   try {
-    const release = await getLatestRelease();
-    if (!release || !isNewerVersion(release.version, app.getVersion()) || lastNotifiedRelease === release.version) return;
-    lastNotifiedRelease = release.version;
-    const answer = await dialog.showMessageBox(window, {
-      type: "info",
-      title: "تحديث جديد لبرنامج شركتي",
-      message: `تتوفر نسخة عربية جديدة (${release.version}).`,
-      detail: "يمكنك مراجعة التغييرات وتنزيل النسخة الجديدة. احفظ نسخة احتياطية من بياناتك قبل تثبيت أي تحديث.",
-      buttons: ["عرض التحديث", "لاحقًا"],
-      defaultId: 1,
-      cancelId: 1,
-      noLink: true,
-    });
-    if (answer.response === 0) await shell.openExternal(release.url);
-  } catch {
-    // Offline, unpublished fork or GitHub API rate-limit: the app still works.
-  }
+    const dir = app.getPath("userData");
+    mkdirSync(dir, { recursive: true });
+    appendFileSync(path.join(dir, "automatic-updates.log"), `${new Date().toISOString()} ${safeEvent} ${safeDetail}\n`, "utf8");
+  } catch { /* updater must not prevent the application from running */ }
 }
 
 function bundledPaths() {
@@ -175,10 +165,13 @@ async function boot() {
   try {
     await ensureServer();
     if (window && !window.isDestroyed()) await window.loadURL(ORIGIN);
-    // Arabic builds are published separately; never offer a raw upstream EXE.
-    void checkArabicUpdates();
-    updateTimer = setInterval(() => void checkArabicUpdates(), RETRY_AFTER_MS);
-    updateTimer.unref?.();
+    // No update dialogs or manual downloads. A verified Arabic release is
+    // downloaded in the background and installed on the next app close only
+    // after a fresh successful PostgreSQL backup.
+    automaticUpdates = startAutomaticUpdates({
+      app, updater: autoUpdater, onLog: logUpdateEvent,
+      idleSeconds: () => powerMonitor.getSystemIdleTime(),
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     dialog.showErrorBox("تعذّر تشغيل Paperclip", `${message}\n\nلم تُحذف بياناتك. يمكنك مراجعة تعليمات التشغيل داخل المشروع.`);
@@ -194,7 +187,7 @@ if (!app.requestSingleInstanceLock()) {
 
 app.on("before-quit", () => {
   shuttingDown = true;
-  if (updateTimer) clearInterval(updateTimer);
+  automaticUpdates?.stop();
   if (serverChild && serverChild.exitCode === null) serverChild.kill();
 });
 app.on("window-all-closed", () => app.quit());

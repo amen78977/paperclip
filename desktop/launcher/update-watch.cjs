@@ -21,6 +21,22 @@ function isNewerVersion(candidate, current) {
   }
   return false;
 }
+function parseArabicRelease(release, repo) {
+  if (!release || release.draft || release.prerelease || typeof release.tag_name !== "string") return null;
+  const match = release.tag_name.match(/^arabic-v(\d+\.\d+\.\d+)$/);
+  if (!match) return null;
+  const version = match[1];
+  const expectedInstaller = `Paperclip-Arabic-Setup-${version}.exe`;
+  const asset = release.assets?.find((item) => item?.name === expectedInstaller && item.state === "uploaded" && Number(item.size) > 1_000_000);
+  if (!asset) return null;
+  try {
+    const url = new URL(release.html_url);
+    const repoParts = repo.split("/");
+    const expected = `/${repoParts[0]}/${repoParts[1]}/releases/tag/${release.tag_name}`;
+    if (url.protocol !== "https:" || url.hostname !== "github.com" || url.pathname !== expected || url.username || url.password) return null;
+    return { version, url: url.origin + url.pathname };
+  } catch { return null; }
+}
 function getLatestRelease({ repo = RELEASE_REPO, timeoutMs = 6000 } = {}) {
   if (!/^[a-z0-9_.-]+\/[a-z0-9_.-]+$/i.test(repo)) return Promise.resolve(null);
   return new Promise((resolve) => {
@@ -41,15 +57,7 @@ function getLatestRelease({ repo = RELEASE_REPO, timeoutMs = 6000 } = {}) {
       });
       res.on("end", () => {
         try {
-          const release = JSON.parse(buffer);
-          // Require an installable artifact, not just an unrelated tag or branch.
-          const asset = release.assets?.find((a) => /^Paperclip-Arabic-Setup-\d+\.\d+\.\d+\.exe$/.test(a.name));
-          const webpage = new URL(release.html_url);
-          if (!asset || webpage.protocol !== "https:" || webpage.hostname !== "github.com" ||
-            !webpage.pathname.startsWith(`/${repo}/releases/tag/`) || release.draft || release.prerelease) {
-            done(null); return;
-          }
-          done({ version: String(release.tag_name).replace(/^arabic-v/, ""), url: webpage.href });
+          done(parseArabicRelease(JSON.parse(buffer), repo));
         } catch { done(null); }
       });
     });
@@ -57,4 +65,4 @@ function getLatestRelease({ repo = RELEASE_REPO, timeoutMs = 6000 } = {}) {
     req.on("error", () => done(null));
   });
 }
-module.exports = { RELEASE_REPO, RETRY_AFTER_MS, isNewerVersion, getLatestRelease };
+module.exports = { RELEASE_REPO, RETRY_AFTER_MS, isNewerVersion, parseArabicRelease, getLatestRelease };
