@@ -2,7 +2,7 @@
  * Run from the repository root: node desktop/stage-runtime.mjs
  * Does not edit the user's current Paperclip installation or personal data.
  */
-import { cpSync, copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { cpSync, copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
@@ -49,6 +49,26 @@ const expectedInstalledModules = path.join(
   process.env.LOCALAPPDATA || path.join(process.env.USERPROFILE || "C:\\Users\\runneradmin", "AppData", "Local"),
   "Programs", "Paperclip Arabic", "resources", "runtime", "node_modules",
 );
+// Published dependency trees include TypeScript declaration/source-map files
+// that are not used by Node.js at runtime. Some exceed the legacy Windows
+// installer limit even after hoisting. Prune only these non-runtime artifacts
+// when their final install paths would be too long; do not silently omit JS,
+// JSON, native executables or any other runtime input.
+let removedOptionalFiles = 0;
+const pruneLongOptionalFiles = (directory, relative = "") => {
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const next = path.join(relative, entry.name);
+    const absolute = path.join(directory, entry.name);
+    const futurePath = path.join(expectedInstalledModules, next);
+    if (entry.isDirectory()) pruneLongOptionalFiles(absolute, next);
+    else if (entry.isFile() && futurePath.length >= 260 && /(?:\.d\.(?:ts|cts|mts)(?:\.map)?|\.map)$/i.test(entry.name)) {
+      unlinkSync(absolute);
+      removedOptionalFiles++;
+    }
+  }
+};
+pruneLongOptionalFiles(installedModules);
+if (removedOptionalFiles > 0) console.log(`Pruned ${removedOptionalFiles} unused long-path declarations/source maps from bundled runtime`);
 let longestInstalledPath = "";
 const scanInstalledPaths = (directory, relative = "") => {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
