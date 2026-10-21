@@ -3,9 +3,10 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { AgentDetail, AgentRuntimeState, HeartbeatRun, Issue } from "@paperclipai/shared";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AgentOverview } from "./AgentDetail";
 import { queryKeys } from "../lib/queryKeys";
+import { i18n } from "@/i18n";
 
 vi.mock("@/lib/router", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
@@ -22,6 +23,26 @@ vi.mock("../components/MarkdownBody", () => ({
 }));
 
 describe("AgentOverview", () => {
+  // Existing layout assertions validate English. The desktop starts in Arabic,
+  // so pin English explicitly instead of depending on an implicit default.
+  beforeEach(async () => { await i18n.changeLanguage("en"); });
+  afterEach(async () => { await i18n.changeLanguage("ar"); });
+
+  it("displays agent overview labels in Arabic when Arabic is selected", async () => {
+    await i18n.changeLanguage("ar");
+    const agent = {
+      id: "arabic-agent", companyId: "company-1", name: "Agent", role: "engineer", status: "idle",
+      adapterType: "codex_local", adapterConfig: {}, runtimeConfig: {},
+    } as unknown as AgentDetail;
+    const markup = renderToStaticMarkup(
+      <QueryClientProvider client={new QueryClient()}>
+        <AgentOverview agent={agent} runs={[]} assignedIssues={[]} directReportCount={0} skillNames={[]} agentRouteId="arabic-agent" />
+      </QueryClientProvider>,
+    );
+    expect(markup).toContain("الهوية");
+    expect(markup).toContain("بيئة التشغيل");
+    expect(markup).toContain("يتبع إداريًا لـ");
+  });
   it("identifies Muse and shows its provider-managed model even when old model fields remain", () => {
     const agent = {
       id: "muse-agent", companyId: "company-1", name: "Muse Researcher", role: "researcher", status: "active",
