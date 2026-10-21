@@ -130,6 +130,21 @@ function startAutomaticUpdates({ app, updater, onLog = () => {},
     }
     backedUpVersion = info.version;
     updater.autoInstallOnAppQuit = true;
+    // electron-updater's BaseUpdater calls addQuitHandler() synchronously
+    // right after dispatching update-downloaded. Our required PostgreSQL
+    // backup is asynchronous, so autoInstallOnAppQuit was still false when
+    // that one-time registration check occurred. Explicitly register the
+    // handler *after* the backup succeeds; otherwise a normal app close does
+    // not install anything even though we logged "prepared".
+    try {
+      if (typeof updater.addQuitHandler !== "function") throw new Error("Quit hook not supported");
+      updater.addQuitHandler();
+    } catch {
+      updater.autoInstallOnAppQuit = false;
+      backedUpVersion = null;
+      onLog("auto_update_quit_hook_failed", info.version);
+      return;
+    }
     onLog("auto_update_prepared", info.version);
     // No confirmation or manual installation step. Apply when the app closes,
     // OR restart unattended after 30 minutes idle with no active agent runs.

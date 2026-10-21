@@ -12,6 +12,8 @@ function updaterFixture(version = "0.1.12") {
   updater.setFeedURL = (feed) => { updater.feed = feed; };
   updater.checkForUpdates = async () => ({ updateInfo: { version } });
   updater.installCalls = 0;
+  updater.quitHookRegistrations = 0;
+  updater.addQuitHandler = () => { updater.quitHookRegistrations++; };
   updater.quitAndInstall = () => { updater.installCalls++; };
   return updater;
 }
@@ -51,6 +53,7 @@ test("verified update installs unattended on app close only after a successful b
     await flush();
     assert.equal(backups, 1);
     assert.equal(updater.autoInstallOnAppQuit, true);
+    assert.equal(updater.quitHookRegistrations, 1);
     assert.equal(updater.installCalls, 0);
   } finally { updates.stop(); }
 });
@@ -58,6 +61,20 @@ test("verified update installs unattended on app close only after a successful b
 test("failed backup prevents an update being applied", async () => {
   const updater = updaterFixture();
   const updates = fixture(updater, { backup: async () => false });
+  try {
+    await updates.check();
+    updater.emit("update-downloaded", { version: goodRelease.version });
+    await flush();
+    assert.equal(updater.autoInstallOnAppQuit, false);
+    assert.equal(updater.quitHookRegistrations, 0);
+    assert.equal(await updates.installIfIdle(), false);
+  } finally { updates.stop(); }
+});
+
+test("missing quit handler blocks installation rather than skipping backup gate", async () => {
+  const updater = updaterFixture();
+  delete updater.addQuitHandler;
+  const updates = fixture(updater);
   try {
     await updates.check();
     updater.emit("update-downloaded", { version: goodRelease.version });
