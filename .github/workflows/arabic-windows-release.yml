@@ -79,7 +79,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           # Ensure bundled Paperclip + PostgreSQL boot with isolated test data
           # and the server actually serves the Arabic HTML before publishing.
-          node desktop/smoke-runtime.mjs
+          powershell.exe -NoLogo -NoProfile -NonInteractive -File desktop/smoke-ci-nonadmin.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           echo "RELEASE_VERSION=$version" >> $env:GITHUB_ENV
       - name: Create an Arabic-only GitHub Release
