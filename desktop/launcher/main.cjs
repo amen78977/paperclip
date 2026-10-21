@@ -168,10 +168,16 @@ async function boot() {
     // No update dialogs or manual downloads. A verified Arabic release is
     // downloaded in the background and installed on the next app close only
     // after a fresh successful PostgreSQL backup.
-    automaticUpdates = startAutomaticUpdates({
-      app, updater: autoUpdater, onLog: logUpdateEvent,
-      idleSeconds: () => powerMonitor.getSystemIdleTime(),
-    });
+    try {
+      automaticUpdates = startAutomaticUpdates({
+        app, updater: autoUpdater, onLog: logUpdateEvent,
+        idleSeconds: () => powerMonitor.getSystemIdleTime(),
+      });
+    } catch (error) {
+      // The updater is an optional service: a feed/init error must never
+      // interrupt the desktop or misleadingly report failed Paperclip startup.
+      logUpdateEvent("auto_update_initialize_failed");
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     dialog.showErrorBox("تعذّر تشغيل Paperclip", `${message}\n\nلم تُحذف بياناتك. يمكنك مراجعة تعليمات التشغيل داخل المشروع.`);

@@ -81,6 +81,7 @@ function startAutomaticUpdates({ app, updater, onLog = () => {},
   // would corrupt the development environment.
   if (!app.isPackaged) return { stop() {}, check: async () => false };
 
+  onLog("auto_update_service_started", app.getVersion());
   updater.setFeedURL(RELEASE_PROVIDER);
   updater.autoDownload = true;
   updater.autoInstallOnAppQuit = false; // unlocked only after a fresh backup
@@ -139,8 +140,16 @@ function startAutomaticUpdates({ app, updater, onLog = () => {},
     if (checking || stopped) return false;
     checking = true;
     try {
+      onLog("auto_update_check_started", app.getVersion());
       const release = await lookup();
-      if (!release || !isNewerVersion(release.version, app.getVersion())) return false;
+      if (!release) {
+        onLog("auto_update_release_lookup_empty");
+        return false;
+      }
+      if (!isNewerVersion(release.version, app.getVersion())) {
+        onLog("auto_update_already_current", release.version);
+        return false;
+      }
       approvedVersion = release.version;
       const update = await updater.checkForUpdates();
       // A mismatch cannot be installed, even if the GitHub feed or metadata
@@ -163,7 +172,7 @@ function startAutomaticUpdates({ app, updater, onLog = () => {},
   const timer = setInterval(() => { void check(); }, RETRY_AFTER_MS);
   timer.unref?.();
   // Don't slow down first paint. The frontend and database come up first.
-  const initialTimer = setTimeout(() => { void check(); }, 15_000);
+  const initialTimer = setTimeout(() => { void check(); }, 8000);
   initialTimer.unref?.();
   const installTimer = setInterval(() => { void installIfIdle(); }, IDLE_RETRY_MS);
   installTimer.unref?.();

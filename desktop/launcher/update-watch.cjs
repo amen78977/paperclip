@@ -5,7 +5,8 @@ const https = require("node:https");
 // Only releases of the Arabic fork are compatible with this Arabic Windows app.
 // Never offer installation of an official upstream English runtime in its place.
 const RELEASE_REPO = "amen78977/paperclip";
-const RETRY_AFTER_MS = 24 * 60 * 60 * 1000;
+// Retry hourly: a transient outage must not defer an automatic update by a day.
+const RETRY_AFTER_MS = 60 * 60 * 1000;
 
 function numericVersion(raw) {
   const match = String(raw || "").match(/^v?(\d+)\.(\d+)\.(\d+)$/);
