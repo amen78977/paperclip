@@ -104,6 +104,23 @@ describe("hermes-local adapter onSpawn forwarding", () => {
     expect(opts.onSpawn).toBe(onSpawn);
   });
 
+  it("does not pass the literal Paperclip auto model to Hermes", async () => {
+    const { ctx } = makeCtx({ model: "auto", provider: "auto" });
+    await execute(ctx as any);
+    const args = vi.mocked(serverUtils.runChildProcess).mock.calls.at(-1)![2];
+    expect(args).not.toContain("-m");
+    expect(args).not.toContain("--provider");
+    expect(args).not.toContain("--yolo");
+  });
+
+  it("honors explicit Hermes model and opt-in dangerous-command approval", async () => {
+    const { ctx } = makeCtx({ model: "example-real-model", dangerouslySkipPermissions: true });
+    await execute(ctx as any);
+    const args = vi.mocked(serverUtils.runChildProcess).mock.calls.at(-1)![2];
+    expect(args.slice(args.indexOf("-m"), args.indexOf("-m") + 2)).toEqual(["-m", "example-real-model"]);
+    expect(args).toContain("--yolo");
+  });
+
   it("keeps wake data in the prompt and drops configured JSON env copies", async () => {
     const { ctx } = makeCtx({ env: { PAPERCLIP_WAKE_PAYLOAD_JSON: "stale configured wake" } });
     const wake = { reason: "issue_assigned", issue: { id: "issue-1", description: "Current task brief" } };

@@ -458,7 +458,9 @@ export async function execute(
   const args: string[] = ["chat", "-q", prompt];
   if (useQuiet) args.push("-Q");
 
-  if (model) {
+  // The Paperclip "auto" sentinel delegates selection to Hermes's configured
+  // model. Passing literal `-m auto` causes Hermes 0.22.x startup to hang.
+  if (model && model !== "auto") {
     args.push("-m", model);
   }
 
@@ -489,7 +491,8 @@ export async function execute(
   // so approval prompts would always timeout and deny legitimate commands
   // (curl, python3 -c, etc.). Agents operate in a sandbox — the approval
   // system is designed for human-attended interactive sessions.
-  args.push("--yolo");
+  // Dangerous-command bypass must be an explicit per-agent opt-in.
+  if (cfgBoolean(config.dangerouslySkipPermissions) === true) args.push("--yolo");
 
   // Failed resumes remain failures. Do not infer a safe restart from CLI text.
   if (sessionId) args.push("--resume", sessionId);

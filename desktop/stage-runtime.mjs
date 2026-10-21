@@ -99,5 +99,24 @@ if (utilsSource.includes(unsafeSymlink)) {
 } else if (!utilsSource.includes(safeSymlink)) {
   throw new Error("Paperclip skill-link implementation changed; review Windows junction support before shipping.");
 }
+// Fix the published Hermes adapter inside the staged Windows runtime. Passing
+// -m auto suppresses the working default from ~/.hermes/config.yaml and can
+// hang Hermes 0.22 on Windows. Also require explicit opt-in for --yolo.
+const hermesExecute = path.join(runtime, "node_modules", "@paperclipai", "hermes-paperclip-adapter", "dist", "server", "execute.js");
+if (!existsSync(hermesExecute)) throw new Error(`Missing bundled Hermes adapter: ${hermesExecute}`);
+let hermesSource = readFileSync(hermesExecute, "utf8");
+const autoOld = 'if (model) {\n        args.push("-m", model);';
+const autoSafe = 'if (model && model !== "auto") {\n        args.push("-m", model);';
+if (hermesSource.includes(autoOld)) hermesSource = hermesSource.replace(autoOld, autoSafe);
+else if (!hermesSource.includes(autoSafe)) throw new Error("Hermes auto-model logic changed; manually verify before shipping.");
+const unsafeYolo = 'args.push("--yolo");';
+const safeYolo = 'if (cfgBoolean(config.dangerouslySkipPermissions) === true) args.push("--yolo");';
+if (hermesSource.includes(unsafeYolo) && !hermesSource.includes(safeYolo)) {
+  hermesSource = hermesSource.replace(unsafeYolo, safeYolo);
+} else if (!hermesSource.includes(safeYolo)) {
+  throw new Error("Hermes dangerous-command policy changed; manually review before shipping.");
+}
+writeFileSync(hermesExecute, hermesSource, "utf8");
+console.log("Applied Hermes Windows default-model and opt-in unsafe command permission fixes");
 console.log(`Staged Arabic UI: ${publishedUI}`);
 console.log(`Staged Node.js ${process.version} x64: ${path.join(runtime, "node.exe")}`);
