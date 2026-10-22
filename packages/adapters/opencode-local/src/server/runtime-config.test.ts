@@ -32,6 +32,37 @@ async function makeConfigHome(initialConfig?: Record<string, unknown>) {
 }
 
 describe("prepareOpenCodeRuntimeConfig", () => {
+  it("allows read-only access to generated Paperclip instructions without unlocking other external directories", async () => {
+    const configHome = await makeConfigHome({ permission: { external_directory: "ask", bash: "ask" } });
+    const id = "11111111-2222-4333-8444-555555555555";
+    const instructions = path.join(configHome, "companies", id, "file-sync", "runs", id, "live", "AGENTS.md");
+    const prepared = await prepareOpenCodeRuntimeConfig({
+      env: { XDG_CONFIG_HOME: configHome },
+      config: { dangerouslySkipPermissions: false, instructionsFilePath: instructions },
+    });
+    cleanupPaths.add(prepared.env.XDG_CONFIG_HOME);
+    const config = JSON.parse(await fs.readFile(path.join(prepared.env.XDG_CONFIG_HOME, "opencode", "opencode.json"), "utf8"));
+    const authorizedPattern = `${path.dirname(instructions).replaceAll("\\", "/")}/*`;
+    expect(config.permission).toMatchObject({
+      bash: "ask",
+      external_directory: { "*": "ask", [authorizedPattern]: "allow" },
+      edit: { "*": "ask", [authorizedPattern]: "deny" },
+    });
+    expect(config.permission.external_directory[`${configHome.replaceAll("\\", "/")}/*`]).toBeUndefined();
+    await prepared.cleanup();
+  });
+
+  it("does not loosen external access for arbitrary non-managed instructions paths", async () => {
+    const configHome = await makeConfigHome({ permission: { external_directory: "deny" } });
+    const prepared = await prepareOpenCodeRuntimeConfig({
+      env: { XDG_CONFIG_HOME: configHome },
+      config: { dangerouslySkipPermissions: false, instructionsFilePath: path.join(configHome, "untrusted", "AGENTS.md") },
+    });
+    cleanupPaths.add(prepared.env.XDG_CONFIG_HOME);
+    const config = JSON.parse(await fs.readFile(path.join(prepared.env.XDG_CONFIG_HOME, "opencode", "opencode.json"), "utf8"));
+    expect(config.permission).toEqual({ external_directory: "deny" });
+    await prepared.cleanup();
+  });
   it("attributes custom OpenRouter aliases and inline overrides without changing other endpoints", async () => {
     const other = { options: { baseURL: "https://other.example/v1", headers: { "X-Title": "Other" } } };
     const configHome = await makeConfigHome({ provider: { other, openrouter: other } });

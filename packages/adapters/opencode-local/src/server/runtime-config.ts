@@ -200,6 +200,35 @@ export async function prepareOpenCodeRuntimeConfig(input: {
     ...existingConfig,
     ...(skipPermissions ? { permission: "allow" } : {}),
   };
+  // A headless Paperclip agent with approval bypass DISABLED must still be
+  // able to read its own, server-generated AGENTS.md instructions. Those live
+  // outside the agent's workspace on Windows and otherwise trigger an
+  // unattended OpenCode `external_directory: ask` prompt that gets rejected.
+  // Grant read access ONLY to the per-run generated instructions folder;
+  // other external directories retain their configured policy. The generated
+  // instructions must never be editable by the agent.
+  if (!skipPermissions && typeof input.config.instructionsFilePath === "string") {
+    const instructions = path.resolve(input.config.instructionsFilePath);
+    if (new RegExp(`[\\\\/]file-sync[\\\\/]runs[\\\\/][a-f0-9-]{36}[\\\\/]live[\\\\/]AGENTS\\.md$`, "i").test(instructions)) {
+      const allowed = `${path.dirname(instructions).replaceAll("\\", "/")}/*`;
+      const configured = nextConfig.permission;
+      const permissions: Record<string, unknown> = isPlainObject(configured)
+        ? { ...configured }
+        : typeof configured === "string" ? { "*": configured } : {};
+      const directoryRules = permissions.external_directory;
+      permissions.external_directory = {
+        ...(isPlainObject(directoryRules) ? directoryRules : { "*": typeof directoryRules === "string" ? directoryRules : "ask" }),
+        [allowed]: "allow",
+      };
+      const editRules = permissions.edit;
+      permissions.edit = {
+        ...(isPlainObject(editRules) ? editRules : { "*": typeof editRules === "string" ? editRules : "ask" }),
+        [allowed]: "deny",
+      };
+      nextConfig.permission = permissions;
+      notes.push("Allowed read-only access to this run's generated AGENTS.md; external directory approvals remain enforced.");
+    }
+  }
   const inlineContent = input.env.OPENCODE_CONFIG_CONTENT ?? process.env.OPENCODE_CONFIG_CONTENT;
   let inlineConfig: Record<string, unknown> | undefined;
   if (inlineContent) {

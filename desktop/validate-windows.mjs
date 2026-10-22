@@ -29,6 +29,7 @@ const mandatory = {
   "Paperclip CLI": path.join(runtime, "node_modules", "paperclipai", "dist", "index.js"),
   "Paperclip server": path.join(runtime, "node_modules", "@paperclipai", "server", "dist", "index.js"),
   "Hermes Windows execution adapter": path.join(runtime, "node_modules", "@paperclipai", "hermes-paperclip-adapter", "dist", "server", "execute.js"),
+  "OpenCode Windows permission adapter": path.join(runtime, "node_modules", "@paperclipai", "adapter-opencode-local", "dist", "server", "runtime-config.js"),
   "Agent runtime binding recovery": path.join(runtime, "node_modules", "@paperclipai", "server", "dist", "routes", "agents.js"),
   "Hoisted Teams Graph runtime": path.join(runtime, "node_modules", "@microsoft", "teams.graph-endpoints", "package.json"),
   "Embedded PostgreSQL": path.join(runtime, "node_modules", "@embedded-postgres", "windows-x64", "native", "bin", "postgres.exe"),
@@ -69,6 +70,12 @@ if (!hermesCode.includes('model && model !== "auto"') ||
   throw new Error("Bundled Hermes adapter may hang on auto model or bypass command safety approvals.");
 }
 console.log("PASS bundled Hermes uses configured model and opt-in unsafe command permissions");
+const openCodePermissionCode = readFileSync(mandatory["OpenCode Windows permission adapter"], "utf8");
+if (!openCodePermissionCode.includes("Read-only managed AGENTS.md external-directory compatibility") ||
+    openCodePermissionCode.includes('if (!skipPermissions) {\n        return {\n            env: input.env,\n            notes: [],')) {
+  throw new Error("Bundled OpenCode cannot safely read its managed instructions without approval bypass.");
+}
+console.log("PASS OpenCode read-only managed instructions, with external directory approvals preserved");
 if (!readFileSync(mandatory["Arabic web UI"], "utf8").includes('lang="ar"')) {
   throw new Error("Missing Arabic-first UI in packaged server.");
 }

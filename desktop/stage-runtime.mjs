@@ -118,6 +118,67 @@ if (hermesSource.includes(unsafeYolo) && !hermesSource.includes(safeYolo)) {
 }
 writeFileSync(hermesExecute, hermesSource, "utf8");
 console.log("Applied Hermes Windows default-model and opt-in unsafe command permission fixes");
+// Published OpenCode adapter versions override disabled approval bypass with
+// `permission: allow`, while the user's private instructions AGENTS.md is
+// outside the working tree and is blocked when approvals ARE respected.
+// Keep the existing external-directory policy but allow read-only access to
+// this one generated per-run instructions folder. Never unlock arbitrary
+// external paths or silently re-enable dangerous tool permissions.
+const openCodeRuntimeConfig = path.join(runtime, "node_modules", "@paperclipai", "adapter-opencode-local", "dist", "server", "runtime-config.js");
+if (!existsSync(openCodeRuntimeConfig)) throw new Error(`Missing bundled OpenCode runtime config: ${openCodeRuntimeConfig}`);
+let openCodeSource = readFileSync(openCodeRuntimeConfig, "utf8");
+const openCodePrematureApprovalReturn = '    if (!skipPermissions) {\n        return {\n            env: input.env,\n            notes: [],\n            cleanup: async () => { },\n        };\n    }\n';
+if (openCodeSource.includes(openCodePrematureApprovalReturn)) {
+  // Old npm versions return before creating a runtime config whenever the
+  // owner leaves unsafe-tool bypass disabled. That also bypasses the narrow
+  // read-only instructions grant below. Apply the safety-preserving path.
+  openCodeSource = openCodeSource.replace(openCodePrematureApprovalReturn, "");
+}
+const openCodeUnsafeNote = '        "Injected runtime OpenCode config with permission=allow for all tools and connections.",';
+const openCodeSafeNote = '        skipPermissions ? "Injected runtime OpenCode config with permission=allow for all tools and connections." : "Prepared isolated OpenCode provider configuration.",';
+if (openCodeSource.includes(openCodeUnsafeNote)) openCodeSource = openCodeSource.replace(openCodeUnsafeNote, openCodeSafeNote);
+const openCodeLegacyConfig = '    const nextConfig = {\n        ...existingConfig,\n        permission: "allow",\n    };';
+const openCodeConditionalConfig = '    const nextConfig = {\n        ...existingConfig,\n        ...(skipPermissions ? { permission: "allow" } : {}),\n    };';
+const openCodeInstructionsMarker = "Read-only managed AGENTS.md external-directory compatibility";
+if (!openCodeSource.includes(openCodeInstructionsMarker)) {
+  const hasSkipFlag = openCodeSource.includes('const skipPermissions = asBoolean(input.config.dangerouslySkipPermissions, true);');
+  const configToReplace = openCodeSource.includes(openCodeLegacyConfig)
+    ? openCodeLegacyConfig
+    : openCodeSource.includes(openCodeConditionalConfig) ? openCodeConditionalConfig : null;
+  if (!configToReplace) throw new Error("Published OpenCode approval configuration changed; manual review required.");
+  const replacement = String.raw`
+    ${hasSkipFlag ? "" : "const skipPermissions = asBoolean(input.config.dangerouslySkipPermissions, true);"}
+    const nextConfig = {
+        ...existingConfig,
+        ...(skipPermissions ? { permission: "allow" } : {}),
+    };
+    // Read-only managed AGENTS.md external-directory compatibility
+    if (!skipPermissions && typeof input.config.instructionsFilePath === "string") {
+        const instructions = path.resolve(input.config.instructionsFilePath);
+        const normalized = instructions.replaceAll("\\", "/");
+        if (/\/file-sync\/runs\/[0-9a-f-]{36}\/live\/AGENTS\.md$/i.test(normalized)) {
+            const authorizedPath = path.dirname(instructions).replaceAll("\\", "/") + "/*";
+            const prior = nextConfig.permission;
+            const ruleSet = isPlainObject(prior) ? { ...prior } : typeof prior === "string" ? { "*": prior } : {};
+            const existingExternal = ruleSet.external_directory;
+            ruleSet.external_directory = {
+                ...(isPlainObject(existingExternal) ? existingExternal : { "*": typeof existingExternal === "string" ? existingExternal : "ask" }),
+                [authorizedPath]: "allow",
+            };
+            const existingEdit = ruleSet.edit;
+            ruleSet.edit = {
+                ...(isPlainObject(existingEdit) ? existingEdit : { "*": typeof existingEdit === "string" ? existingEdit : "ask" }),
+                [authorizedPath]: "deny",
+            };
+            nextConfig.permission = ruleSet;
+        }
+    }`.trimEnd();
+  openCodeSource = openCodeSource.replace(configToReplace, replacement);
+}
+// Persist permission cleanups even when this is a second/idempotent staging
+// pass and the generated instructions-scoping snippet already exists.
+writeFileSync(openCodeRuntimeConfig, openCodeSource, "utf8");
+console.log("Applied scoped read-only OpenCode AGENTS.md access without bypassing external directory approvals");
 // The published server currently keeps every agent's managed AI subscription
 // binding even when its harness changes to an incompatible local CLI. This
 // blocks recovery to an already-authenticated local CLI after an expired
