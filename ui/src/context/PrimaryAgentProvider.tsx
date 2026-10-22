@@ -46,6 +46,7 @@ export function PrimaryAgentProvider({ children }: { children: ReactNode }) {
   return <PrimaryAgentPresentationProvider value={companyId ? {
     companyId, primaryAgentId: primaryAgent?.id ?? null, primaryAgent,
     loading: preference.loading || roster.isPending,
+    unsupported: preference.unsupported,
     error: error?.message,
     onRetry: () => { void preference.retry(); void roster.refetch(); },
     pendingAgentId: mutation.isPending && isCurrentScope(mutation.variables) ? mutation.variables.agentId : null,

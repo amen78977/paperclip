@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PrimaryAgentProvider } from "./PrimaryAgentProvider";
 import { usePrimaryAgentPresentation } from "@/components/primary-agent/PrimaryAgentPresentation";
 import { queryKeys } from "@/lib/queryKeys";
+import { ApiError } from "@/api/client";
 
 const state = vi.hoisted(() => ({
   companyId: "company-a", get: vi.fn(), set: vi.fn(), session: vi.fn(), toast: vi.fn(),
@@ -33,6 +34,7 @@ function Harness() {
     <button onClick={() => setOnboarding(true)}>Continue onboarding</button>
     {onboarding ? <aside>Onboarding is open</aside> : null}
     <span data-pending>{value?.pendingAgentId ?? "none"}</span>
+    <span data-unsupported>{value?.unsupported ? "unsupported" : "supported"}</span>
   </>;
 }
 async function render() {
@@ -58,6 +60,13 @@ afterEach(async () => {
 });
 
 describe("primary agent persistence provider", () => {
+  it("suppresses the legacy server's missing optional primary-agent route without hiding other failures", async () => {
+    state.get.mockRejectedValueOnce(new ApiError("API route not found", 404, { error: "API route not found" }));
+    await render();
+    await waitForOutput("none");
+    expect(container.querySelector("[data-unsupported]")?.textContent).toBe("unsupported");
+    expect(state.toast).not.toHaveBeenCalled();
+  });
   it("optimistically switches, restores the previous crown on failure, and offers a working retry", async () => {
     let reject!: (error: Error) => void;
     state.set.mockImplementationOnce(() => new Promise((_resolve, onReject) => { reject = onReject; }));

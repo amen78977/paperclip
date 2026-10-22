@@ -12,6 +12,7 @@ export interface PrimaryAgentPresentation {
   primaryAgentId: string | null;
   primaryAgent: Agent | null;
   loading?: boolean;
+  unsupported?: boolean;
   error?: string;
   onRetry?: () => void;
   pendingAgentId?: string | null;
@@ -43,7 +44,7 @@ export function SetPrimaryAgentButton({ agent }: {
   agent: Agent;
 }) {
   const primary = usePrimaryAgentPresentation(agent.companyId);
-  if (!primary || agent.status === "terminated" || agent.status === "pending_approval") return null;
+  if (!primary || primary.unsupported || agent.status === "terminated" || agent.status === "pending_approval") return null;
   if (primary.error) return <Button type="button" variant="link" size="sm" onClick={primary.onRetry}
     className="h-auto justify-start p-0 text-xs text-destructive">Retry loading primary agent</Button>;
   const selected = primary.primaryAgentId === agent.id;
