@@ -7,6 +7,7 @@ const { existsSync, readFileSync, appendFileSync, mkdirSync } = require("node:fs
 const path = require("node:path");
 const http = require("node:http");
 const { startAutomaticUpdates } = require("./auto-update.cjs");
+const { getOrCreateAgentJwtSecret } = require("./agent-jwt-secret.cjs");
 
 // A dedicated port prevents this app from hijacking the existing user's
 // standard Paperclip instance on port 3100.
@@ -69,8 +70,13 @@ function httpHealth(timeout = 1500) {
 
 function launchCli(command, extra, options = {}) {
   const { node, cli, runtime } = bundledPaths();
+  const agentJwtSecret = getOrCreateAgentJwtSecret(
+    app.getPath("userData"),
+    process.env.PAPERCLIP_AGENT_JWT_SECRET || process.env.BETTER_AUTH_SECRET || "",
+  );
   const env = {
     ...process.env,
+    PAPERCLIP_AGENT_JWT_SECRET: agentJwtSecret,
     PATH: `${runtime}${path.delimiter}${process.env.PATH ?? ""}`,
     PORT: String(PORT),
     HOST,
