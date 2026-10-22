@@ -113,6 +113,18 @@ describe("hermes-local adapter onSpawn forwarding", () => {
     expect(args).not.toContain("--yolo");
   });
 
+  it("logs only boolean scoped API presence, never the run bearer token", async () => {
+    const { ctx } = makeCtx();
+    const bearer = "synthetic-test-scoped-agent-bearer";
+    await execute({ ...ctx, authToken: bearer } as any);
+    const notes = vi.mocked(ctx.onLog).mock.calls.map((call) => String(call[1])).join("\n");
+    expect(notes).toContain("Scoped API environment: key=present");
+    expect(notes).toContain("run=present");
+    expect(notes).not.toContain(bearer);
+    const opts = vi.mocked(serverUtils.runChildProcess).mock.calls.at(-1)![3];
+    expect(opts.env.PAPERCLIP_API_KEY).toBe(bearer);
+  });
+
   it("honors explicit Hermes model and opt-in dangerous-command approval", async () => {
     const { ctx } = makeCtx({ model: "example-real-model", dangerouslySkipPermissions: true });
     await execute(ctx as any);

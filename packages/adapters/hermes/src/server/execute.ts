@@ -527,6 +527,11 @@ export async function execute(
   delete env.PAPERCLIP_WAKE_PAYLOAD_JSON;
   if ((ctx as any).authToken) env.PAPERCLIP_API_KEY = (ctx as any).authToken;
 
+  // Diagnostics are presence-only. Never log an agent-scoped bearer token,
+  // signing secret, or its length. This distinguishes missing token issuance
+  // from Hermes terminal subprocess credential filtering on Windows.
+  await ctx.onLog("stdout", `[hermes] Scoped API environment: key=${env.PAPERCLIP_API_KEY ? "present" : "missing"}, url=${env.PAPERCLIP_API_URL ? "present" : "missing"}, run=${env.PAPERCLIP_RUN_ID ? "present" : "missing"}\n`);
+
   // BUG FIX: Read task context from ctx.context (wake context), not ctx.config (adapter config)
   const ctxContext = (ctx as any).context || {};
   const envTaskId = cfgString(ctxContext.taskId) || cfgString(ctxContext.issueId) || cfgString(ctx.config?.taskId);

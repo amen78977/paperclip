@@ -143,6 +143,17 @@ if (hermesSource.includes(unsafeYolo) && !hermesSource.includes(safeYolo)) {
 } else if (!hermesSource.includes(safeYolo)) {
   throw new Error("Hermes dangerous-command policy changed; manually review before shipping.");
 }
+// The packaged Hermes adapter originates from the published npm server, not
+// the TypeScript workspace source. Keep production's read-only, presence-only
+// scoped API diagnostic consistent with our fork until it lands upstream.
+const hermesEnvAnchor = 'if (ctx.authToken)\n        env.PAPERCLIP_API_KEY = ctx.authToken;';
+const hermesEnvMarker = '[hermes] Scoped API environment:';
+if (!hermesSource.includes(hermesEnvMarker)) {
+  if (!hermesSource.includes(hermesEnvAnchor)) {
+    throw new Error('Hermes scoped token injection changed; manual review required before packaging.');
+  }
+  hermesSource = hermesSource.replace(hermesEnvAnchor, hermesEnvAnchor + '\n    await ctx.onLog("stdout", `[hermes] Scoped API environment: key=${env.PAPERCLIP_API_KEY ? "present" : "missing"}, url=${env.PAPERCLIP_API_URL ? "present" : "missing"}, run=${env.PAPERCLIP_RUN_ID ? "present" : "missing"}\\n`);');
+}
 writeFileSync(hermesExecute, hermesSource, "utf8");
 console.log("Applied Hermes Windows default-model and opt-in unsafe command permission fixes");
 // Published OpenCode adapter versions override disabled approval bypass with
