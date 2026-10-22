@@ -172,6 +172,8 @@ const copilotOnboardingQualified = PAPERCLIP_RUNNER_ACPX_PROFILES.some(
 );
 
 function restoreOnboardingAdapterType(savedAdapterType: unknown, provider?: unknown, savedCopilot?: unknown): AdapterType {
+  if (savedAdapterType === "paperclip_runner" && provider === "pi") return "pi_local";
+  if (savedAdapterType === "paperclip_runner" && provider === "opencode") return "opencode_local";
   if (savedAdapterType === "paperclip_runner" && savedCopilot !== true && (provider === undefined || provider === "codex")) return "codex_local";
   return typeof savedAdapterType === "string" && (savedAdapterType !== "paperclip_runner" || (savedCopilot === true && copilotOnboardingQualified))
     ? savedAdapterType
@@ -617,7 +619,7 @@ function OnboardingWizardInner({
     restoreOnboardingAdapterType(saved?.adapterType, saved?.runnerProvider, saved?.onboardingCopilot),
   );
   const [runner, setRunner] = useState<AgentRunnerChoice>(() => saved?.runner === "legacy" || saved?.runner === "paperclip"
-    ? saved.runner : saved?.adapterType === "paperclip_runner" && (saved?.runnerProvider === undefined || ["codex", "claude", "acpx"].includes(String(saved?.runnerProvider))) ? "paperclip" : "auto");
+    ? saved.runner : saved?.adapterType === "paperclip_runner" && (saved?.runnerProvider === undefined || ["codex", "claude", "acpx", "opencode", "pi"].includes(String(saved?.runnerProvider))) ? "paperclip" : "auto");
   /**
    * Whether a model source has been chosen, as opposed to which one
    * `adapterType` happens to hold.
@@ -647,7 +649,7 @@ function OnboardingWizardInner({
   const savedNativeRunnerDraft = saved?.adapterType === "paperclip_runner" && !(saved?.onboardingCopilot === true && copilotOnboardingQualified);
   const [cwd, setCwd] = useState((saved?.cwd as string) ?? "");
   const [model, setModel] = useState(
-    savedNativeRunnerDraft && saved?.runnerProvider !== undefined && !["codex", "claude", "acpx"].includes(String(saved.runnerProvider)) ? "" : (saved?.model as string) ?? "",
+    savedNativeRunnerDraft && saved?.runnerProvider !== undefined && !["codex", "claude", "acpx", "opencode", "pi"].includes(String(saved.runnerProvider)) ? "" : (saved?.model as string) ?? "",
   );
   const [command, setCommand] = useState(
     saved?.adapterType === "paperclip_runner" ? "" : (saved?.command as string) ?? "",
@@ -1053,7 +1055,7 @@ function OnboardingWizardInner({
     if (requestCopilotModels) void refreshAdapterModels();
   }, [requestCopilotModels, copilotModelScope, refreshAdapterModels]);
   const copilotModelReady = Boolean(copilotConnection && copilotEnvironmentReady && !adapterModelsError && !adapterModelsFetching && adapterModels?.some((entry) => entry.id === model.trim()));
-  const needsRunnerDiscovery = ["codex_local", "claude_local"].includes(adapterType) && runner === "auto";
+  const needsRunnerDiscovery = ["codex_local", "claude_local", "opencode_local", "pi_local"].includes(adapterType) && runner === "auto";
   const resolvedRunner = runner === "auto"
     ? runnerDiscovery.data?.find(item => item.type === adapterType)?.defaultRunner
     : runner;
@@ -2037,7 +2039,7 @@ function OnboardingWizardInner({
       ...defaultCreateValues,
       adapterType,
       runner,
-      ...(isCopilot ? { adapterSchemaValues: { provider: "acpx", acpxAgent: "copilot" } } : {}),
+      ...(isCopilot ? { adapterSchemaValues: { provider: "acpx", acpxAgent: "copilot" } } : adapterType === "pi_local" ? { adapterSchemaValues: savedConfig } : {}),
       resolvedRunner: setupRunner ?? resolvedRunner,
       model:
         adapterType === "gemini_local"
@@ -2267,7 +2269,7 @@ function OnboardingWizardInner({
         {
           adapterConfig: testedConfig,
           ...(restoredSetup?.companyId === createdCompanyId ? { agentId: restoredSetup.id } : {}),
-          ...(["codex_local", "claude_local"].includes(adapterType) && runner !== "auto" ? { runner } : {}),
+          ...(["codex_local", "claude_local", "opencode_local", "pi_local"].includes(adapterType) && runner !== "auto" ? { runner } : {}),
           ...(managedBindingForStep() ? { aiConnection: managedBindingForStep() } : {}),
           environmentId,
         }
@@ -2529,7 +2531,7 @@ function OnboardingWizardInner({
         ...(restoredSetup?.companyId === createdCompanyId ? { reportsTo: restoredSetup.reportsTo } : {}),
         adapterType,
         adapterConfig: hireAdapterConfig,
-        ...(["codex_local", "claude_local"].includes(adapterType) && runner !== "auto" ? { runner } : {}),
+        ...(["codex_local", "claude_local", "opencode_local", "pi_local"].includes(adapterType) && runner !== "auto" ? { runner } : {}),
         ...(shouldApplyStoredClaudeLogin ? { applyStoredClaudeLogin: true } : {}),
         // The server owns what the first agent is told now: this marker seeds
         // the chief-of-staff persona over the agent's entry instruction file.
@@ -3277,7 +3279,7 @@ function OnboardingWizardInner({
                     ) : null}
                   </motion.div>
 
-                  {sourceSelected && ["codex_local", "claude_local"].includes(adapterType) && <details className="space-y-3">
+                  {sourceSelected && ["codex_local", "claude_local", "opencode_local", "pi_local"].includes(adapterType) && <details className="space-y-3">
                     <summary className="cursor-pointer text-sm text-muted-foreground">Advanced</summary>
                     <AgentRunnerSelect value={runner} disabled={loading || adapterEnvLoading}
                       pending={runnerDiscovery.isFetching} error={runnerDiscovery.error?.message} onRetry={() => { void runnerDiscovery.refetch(); }}
