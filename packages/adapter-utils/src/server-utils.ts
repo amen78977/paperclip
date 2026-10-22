@@ -4750,7 +4750,14 @@ export async function runChildProcess(
     opts.onLogError ??
     ((err, id, msg) => console.warn({ err, runId: id }, msg));
   return new Promise<RunProcessResult>((resolve, reject) => {
-    const sanitizedRequestedEnv = stripServerOnlyAgentSecrets(opts.env);
+    // Remote SSH execution requires a complete string-only environment.
+    // NodeJS.ProcessEnv permits undefined values even though the caller's
+    // adapter config does not, so narrow it after removing server secrets.
+    const sanitizedRequestedEnv: Record<string, string> = Object.fromEntries(
+      Object.entries(stripServerOnlyAgentSecrets(opts.env)).filter(
+        (entry): entry is [string, string] => typeof entry[1] === "string",
+      ),
+    );
     const rawMerged: NodeJS.ProcessEnv = stripServerOnlyAgentSecrets({
       ...sanitizeInheritedPaperclipEnv(process.env),
       ...sanitizedRequestedEnv,
