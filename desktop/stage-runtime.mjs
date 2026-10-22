@@ -99,6 +99,33 @@ if (utilsSource.includes(unsafeSymlink)) {
 } else if (!utilsSource.includes(safeSymlink)) {
   throw new Error("Paperclip skill-link implementation changed; review Windows junction support before shipping.");
 }
+// Paperclip must keep its HMAC master signing secret in the server to mint
+// agent-scoped JWTs, but upstream adapters commonly include process.env in
+// child opts.env. Strip only server-master secrets at the final spawn boundary
+// (local and remote), while preserving the already-scoped PAPERCLIP_API_KEY.
+let childUtils = readFileSync(adapterUtils, "utf8");
+const childSecretsMarker = "function stripServerOnlyAgentSecrets(env)";
+if (!childUtils.includes(childSecretsMarker)) {
+  const rawOld = '        const rawMerged = {\n            ...sanitizeInheritedPaperclipEnv(process.env),\n            ...opts.env,\n        };';
+  const remoteOld = 'remoteEnv: opts.remoteExecution ? opts.env : null,';
+  const childOld = 'const childEnv = { ...mergedEnv, ...target.env };';
+  if (![rawOld, remoteOld, childOld, 'export async function runChildProcess('].every((s) => childUtils.includes(s))) {
+    throw new Error("Bundled child process environment plumbing changed; review server-only secret handling before shipping.");
+  }
+  const secretHelper = `function stripServerOnlyAgentSecrets(env) {
+    const safe = { ...env };
+    const forbidden = new Set(["PAPERCLIP_AGENT_JWT_SECRET", "BETTER_AUTH_SECRET", "PAPERCLIP_TOOL_ACTION_SIGNING_SECRET"]);
+    for (const key of Object.keys(safe)) if (forbidden.has(key.toUpperCase())) delete safe[key];
+    return safe;
+}
+`;
+  childUtils = childUtils.replace('export async function runChildProcess(', secretHelper + 'export async function runChildProcess(');
+  childUtils = childUtils.replace(rawOld, '        const sanitizedRequestedEnv = stripServerOnlyAgentSecrets(opts.env);\n        const rawMerged = stripServerOnlyAgentSecrets({\n            ...sanitizeInheritedPaperclipEnv(process.env),\n            ...sanitizedRequestedEnv,\n        });');
+  childUtils = childUtils.replace(remoteOld, 'remoteEnv: opts.remoteExecution ? sanitizedRequestedEnv : null,');
+  childUtils = childUtils.replace(childOld, 'const childEnv = stripServerOnlyAgentSecrets({ ...mergedEnv, ...target.env });');
+  writeFileSync(adapterUtils, childUtils, "utf8");
+}
+console.log("PASS master JWT and authentication signing secrets are excluded from all agent children");
 // Fix the published Hermes adapter inside the staged Windows runtime. Passing
 // -m auto suppresses the working default from ~/.hermes/config.yaml and can
 // hang Hermes 0.22 on Windows. Also require explicit opt-in for --yolo.

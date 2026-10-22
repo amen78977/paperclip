@@ -3544,6 +3544,22 @@ export function sanitizeInheritedPaperclipEnv(
   return env;
 }
 
+// The bundled desktop must sign agent-scoped API tokens in its SERVER process.
+// Never forward those master signing secrets to an LLM CLI process. Agent
+// children receive only the short-lived minted PAPERCLIP_API_KEY instead.
+const SERVER_ONLY_CHILD_ENV_KEYS = new Set([
+  "PAPERCLIP_AGENT_JWT_SECRET",
+  "BETTER_AUTH_SECRET",
+  "PAPERCLIP_TOOL_ACTION_SIGNING_SECRET",
+]);
+export function stripServerOnlyAgentSecrets(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const safe: NodeJS.ProcessEnv = { ...env };
+  for (const key of Object.keys(safe)) {
+    if (SERVER_ONLY_CHILD_ENV_KEYS.has(key.toUpperCase())) delete safe[key];
+  }
+  return safe;
+}
+
 export function defaultPathForPlatform() {
   if (process.platform === "win32") {
     return "C:\\Windows\\System32;C:\\Windows;C:\\Windows\\System32\\Wbem";
@@ -4734,10 +4750,11 @@ export async function runChildProcess(
     opts.onLogError ??
     ((err, id, msg) => console.warn({ err, runId: id }, msg));
   return new Promise<RunProcessResult>((resolve, reject) => {
-    const rawMerged: NodeJS.ProcessEnv = {
+    const sanitizedRequestedEnv = stripServerOnlyAgentSecrets(opts.env);
+    const rawMerged: NodeJS.ProcessEnv = stripServerOnlyAgentSecrets({
       ...sanitizeInheritedPaperclipEnv(process.env),
-      ...opts.env,
-    };
+      ...sanitizedRequestedEnv,
+    });
 
     // Strip Claude Code nesting-guard env vars so spawned `claude` processes
     // don't refuse to start with "cannot be launched inside another session".
@@ -4760,11 +4777,11 @@ export async function runChildProcess(
     }
     void resolveSpawnTarget(command, args, opts.cwd, mergedEnv, {
       remoteExecution: opts.remoteExecution ?? null,
-      remoteEnv: opts.remoteExecution ? opts.env : null,
+      remoteEnv: opts.remoteExecution ? sanitizedRequestedEnv : null,
       localProcessSandbox: opts.localProcessSandbox ?? null,
     })
       .then((target) => {
-        const childEnv = { ...mergedEnv, ...target.env };
+        const childEnv = stripServerOnlyAgentSecrets({ ...mergedEnv, ...target.env });
         for (const [key, value] of Object.entries(childEnv)) {
           if (value === undefined) delete childEnv[key];
         }

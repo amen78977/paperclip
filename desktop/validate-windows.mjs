@@ -29,6 +29,7 @@ const mandatory = {
   "Paperclip CLI": path.join(runtime, "node_modules", "paperclipai", "dist", "index.js"),
   "Paperclip server": path.join(runtime, "node_modules", "@paperclipai", "server", "dist", "index.js"),
   "Hermes Windows execution adapter": path.join(runtime, "node_modules", "@paperclipai", "hermes-paperclip-adapter", "dist", "server", "execute.js"),
+  "Local agent master secret boundary": path.join(runtime, "node_modules", "@paperclipai", "adapter-utils", "dist", "server-utils.js"),
   "OpenCode Windows permission adapter": path.join(runtime, "node_modules", "@paperclipai", "adapter-opencode-local", "dist", "server", "runtime-config.js"),
   "Agent runtime binding recovery": path.join(runtime, "node_modules", "@paperclipai", "server", "dist", "routes", "agents.js"),
   "Hoisted Teams Graph runtime": path.join(runtime, "node_modules", "@microsoft", "teams.graph-endpoints", "package.json"),
@@ -70,6 +71,13 @@ if (!hermesCode.includes('model && model !== "auto"') ||
   throw new Error("Bundled Hermes adapter may hang on auto model or bypass command safety approvals.");
 }
 console.log("PASS bundled Hermes uses configured model and opt-in unsafe command permissions");
+const masterBoundary = readFileSync(mandatory["Local agent master secret boundary"], "utf8");
+if (!masterBoundary.includes('function stripServerOnlyAgentSecrets(env)') ||
+    !masterBoundary.includes('const childEnv = stripServerOnlyAgentSecrets({ ...mergedEnv, ...target.env });') ||
+    !masterBoundary.includes('remoteEnv: opts.remoteExecution ? sanitizedRequestedEnv : null')) {
+  throw new Error("Agent child process can inherit server master JWT or Better Auth signing secret.");
+}
+console.log("PASS agent child process environments exclude master server signing secrets");
 const openCodePermissionCode = readFileSync(mandatory["OpenCode Windows permission adapter"], "utf8");
 if (!openCodePermissionCode.includes("Read-only managed AGENTS.md external-directory compatibility") ||
     openCodePermissionCode.includes('if (!skipPermissions) {\n        return {\n            env: input.env,\n            notes: [],')) {
