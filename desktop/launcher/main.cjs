@@ -69,6 +69,7 @@ function httpHealth(timeout = 1500) {
 }
 
 function launchCli(command, extra, options = {}) {
+  logUpdateEvent("desktop_cli_launch_requested");
   const { node, cli, runtime } = bundledPaths();
   const agentJwtSecret = getOrCreateAgentJwtSecret(
     app.getPath("userData"),
@@ -86,13 +87,19 @@ function launchCli(command, extra, options = {}) {
     NO_COLOR: "1",
     ELECTRON_RUN_AS_NODE: "",
   };
-  return spawn(node, [cli, command, ...extra], {
+  const child = spawn(node, [cli, command, ...extra], {
     ...options,
     windowsHide: true,
     env,
     cwd: runtime,
     stdio: ["ignore", "pipe", "pipe"],
   });
+  child.once("spawn", () => logUpdateEvent("desktop_cli_spawned"));
+  child.once("error", () => logUpdateEvent("desktop_cli_spawn_failed"));
+  child.once("exit", (code, signal) => {
+    logUpdateEvent(code === 0 ? "desktop_cli_exit_zero" : signal ? "desktop_cli_exit_signal" : "desktop_cli_exit_error");
+  });
+  return child;
 }
 
 function runAndWait(command, args, timeout = 90_000) {
@@ -113,6 +120,7 @@ function runAndWait(command, args, timeout = 90_000) {
 }
 
 async function ensureServer() {
+  logUpdateEvent("desktop_server_initialize");
   // Preserves the user's existing ~/.paperclip instances. No destructive
   // migration, resetting of credentials or replacement of prior data.
   const dataDir = path.join(app.getPath("userData"), "paperclip-data");
@@ -123,6 +131,14 @@ async function ensureServer() {
   serverChild = configExists
     ? launchCli("run", ["--data-dir", dataDir])
     : launchCli("onboard", ["--yes", "--no-install-service", "--data-dir", dataDir]);
+  let spawnError = null;
+  serverChild.once("error", (error) => {
+    // On Windows a failed child spawn may leave exitCode and signalCode null.
+    // Record a safe classification and report promptly instead of silently
+    // spinning for eight minutes on the Arabic loading screen.
+    spawnError = error;
+    logUpdateEvent("desktop_cli_spawn_error");
+  });
   const chunks = [];
   const record = (part) => {
     chunks.push(String(part).slice(-1500));
@@ -132,9 +148,15 @@ async function ensureServer() {
   serverChild.stderr?.on("data", record);
   const deadline = Date.now() + START_TIMEOUT_MS;
   while (!shuttingDown && Date.now() < deadline) {
+    if (spawnError) {
+      throw new Error(`Cannot start the bundled Paperclip server (${spawnError.code || "spawn error"}).`);
+    }
     if (await httpHealth()) return;
-    if (serverChild.exitCode !== null) {
-      throw new Error(`Paperclip stopped during startup (${serverChild.exitCode}). ${chunks.join("").slice(-2000)}`);
+    // A process killed by a Windows signal reports `exitCode: null` and a
+    // non-null `signalCode`. Without checking both we unnecessarily wait the
+    // full eight-minute boot timeout with no server process left alive.
+    if (serverChild.exitCode !== null || serverChild.signalCode !== null) {
+      throw new Error(`Paperclip stopped during startup (${serverChild.exitCode ?? serverChild.signalCode}). ${chunks.join("").slice(-2000)}`);
     }
     await new Promise((resolve) => setTimeout(resolve, 1100));
   }
@@ -167,9 +189,11 @@ function createWindow() {
 }
 
 async function boot() {
+  logUpdateEvent("desktop_boot_started");
   createWindow();
   try {
     await ensureServer();
+    logUpdateEvent("desktop_server_ready");
     if (window && !window.isDestroyed()) await window.loadURL(ORIGIN);
     // No update dialogs or manual downloads. A verified Arabic release is
     // downloaded in the background and installed on the next app close only
@@ -185,6 +209,7 @@ async function boot() {
       logUpdateEvent("auto_update_initialize_failed");
     }
   } catch (error) {
+    logUpdateEvent("desktop_server_startup_failed");
     const message = error instanceof Error ? error.message : String(error);
     dialog.showErrorBox("تعذّر تشغيل Paperclip", `${message}\n\nلم تُحذف بياناتك. يمكنك مراجعة تعليمات التشغيل داخل المشروع.`);
   }
