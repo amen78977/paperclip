@@ -28,6 +28,7 @@ const mandatory = {
   "Node.js v24": path.join(runtime, "node.exe"),
   "Paperclip CLI": path.join(runtime, "node_modules", "paperclipai", "dist", "index.js"),
   "Paperclip server": path.join(runtime, "node_modules", "@paperclipai", "server", "dist", "index.js"),
+  "Agent runtime binding recovery": path.join(runtime, "node_modules", "@paperclipai", "server", "dist", "routes", "agents.js"),
   "Hoisted Teams Graph runtime": path.join(runtime, "node_modules", "@microsoft", "teams.graph-endpoints", "package.json"),
   "Embedded PostgreSQL": path.join(runtime, "node_modules", "@embedded-postgres", "windows-x64", "native", "bin", "postgres.exe"),
   "Arabic web UI": path.join(runtime, "node_modules", "@paperclipai", "server", "ui-dist", "index.html"),
@@ -55,6 +56,12 @@ for (const required of ["/auto-update.cjs", "/update-watch.cjs", "/node_modules/
   }
 }
 console.log("PASS verified automatic updater and Arabic-only GitHub release feed in packaged app");
+const agentRuntimeCode = readFileSync(mandatory["Agent runtime binding recovery"], "utf8");
+if (!agentRuntimeCode.includes('existing.adapterType === requestedAdapterType && (existing.adapterType !== "paperclip_runner"') ||
+    !agentRuntimeCode.includes('aiRuntimeConnectionBindingSchema.safeParse(requestedRuntimeConfig ? requestedRuntimeConfig.aiConnection : existing.runtimeConfig.aiConnection).data')) {
+  throw new Error("Bundled server prevents selecting authenticated local CLI when a managed AI subscription expires.");
+}
+console.log("PASS bundled agent binding recovery for locally authenticated CLI");
 if (!readFileSync(mandatory["Arabic web UI"], "utf8").includes('lang="ar"')) {
   throw new Error("Missing Arabic-first UI in packaged server.");
 }

@@ -118,5 +118,27 @@ if (hermesSource.includes(unsafeYolo) && !hermesSource.includes(safeYolo)) {
 }
 writeFileSync(hermesExecute, hermesSource, "utf8");
 console.log("Applied Hermes Windows default-model and opt-in unsafe command permission fixes");
+// The published server currently keeps every agent's managed AI subscription
+// binding even when its harness changes to an incompatible local CLI. This
+// blocks recovery to an already-authenticated local CLI after an expired
+// isolated subscription (and makes the compatibility check itself fail).
+// The checked-in source fixes this by retaining a binding only for the same
+// harness and using the explicitly requested runtime config when present.
+// Keep the compatibility fix narrow and fail if the vendored server diverges.
+const agentsRoute = path.join(runtime, "node_modules", "@paperclipai", "server", "dist", "routes", "agents.js");
+if (!existsSync(agentsRoute)) throw new Error(`Missing bundled agent route: ${agentsRoute}`);
+let routeSource = readFileSync(agentsRoute, "utf8");
+const stickyBindingOld = 'if (existing.runtimeConfig.aiConnection && requestedRuntimeConfig && !requestedRuntimeConfig.aiConnection)\n            requestedRuntimeConfig.aiConnection = existing.runtimeConfig.aiConnection;';
+const stickyBindingNew = 'if (existing.runtimeConfig.aiConnection && requestedRuntimeConfig && !requestedRuntimeConfig.aiConnection && existing.adapterType === requestedAdapterType && (existing.adapterType !== "paperclip_runner" || (existing.adapterConfig.provider === (patchData.adapterConfig ?? existing.adapterConfig).provider && existing.adapterConfig.acpxAgent === (patchData.adapterConfig ?? existing.adapterConfig).acpxAgent)))\n            requestedRuntimeConfig.aiConnection = existing.runtimeConfig.aiConnection;';
+const initialShim = 'if (existing.runtimeConfig.aiConnection && requestedRuntimeConfig && !requestedRuntimeConfig.aiConnection && agentHarnessType(existing.adapterType, existing.adapterConfig) === agentHarnessType(requestedAdapterType, patchData.adapterConfig ?? existing.adapterConfig))\n            requestedRuntimeConfig.aiConnection = existing.runtimeConfig.aiConnection;';
+if (routeSource.includes(stickyBindingOld)) routeSource = routeSource.replace(stickyBindingOld, stickyBindingNew);
+else if (routeSource.includes(initialShim)) routeSource = routeSource.replace(initialShim, stickyBindingNew);
+else if (!routeSource.includes(stickyBindingNew)) throw new Error("Bundled agent binding retention changed; review before shipping.");
+const nullishBindingOld = 'aiRuntimeConnectionBindingSchema.safeParse(requestedRuntimeConfig?.aiConnection ?? existing.runtimeConfig.aiConnection).data';
+const explicitBindingNew = 'aiRuntimeConnectionBindingSchema.safeParse(requestedRuntimeConfig ? requestedRuntimeConfig.aiConnection : existing.runtimeConfig.aiConnection).data';
+if (routeSource.includes(nullishBindingOld)) routeSource = routeSource.replace(nullishBindingOld, explicitBindingNew);
+else if (!routeSource.includes(explicitBindingNew)) throw new Error("Bundled explicit agent binding handling changed; review before shipping.");
+writeFileSync(agentsRoute, routeSource, "utf8");
+console.log("Applied Windows local-CLI recovery for expired isolated AI account bindings");
 console.log(`Staged Arabic UI: ${publishedUI}`);
 console.log(`Staged Node.js ${process.version} x64: ${path.join(runtime, "node.exe")}`);
