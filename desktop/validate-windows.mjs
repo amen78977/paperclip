@@ -28,6 +28,7 @@ const mandatory = {
   "Node.js v24": path.join(runtime, "node.exe"),
   "Paperclip CLI": path.join(runtime, "node_modules", "paperclipai", "dist", "index.js"),
   "Paperclip server": path.join(runtime, "node_modules", "@paperclipai", "server", "dist", "index.js"),
+  "Hermes Windows execution adapter": path.join(runtime, "node_modules", "@paperclipai", "hermes-paperclip-adapter", "dist", "server", "execute.js"),
   "Agent runtime binding recovery": path.join(runtime, "node_modules", "@paperclipai", "server", "dist", "routes", "agents.js"),
   "Hoisted Teams Graph runtime": path.join(runtime, "node_modules", "@microsoft", "teams.graph-endpoints", "package.json"),
   "Embedded PostgreSQL": path.join(runtime, "node_modules", "@embedded-postgres", "windows-x64", "native", "bin", "postgres.exe"),
@@ -62,6 +63,12 @@ if (!agentRuntimeCode.includes('existing.adapterType === requestedAdapterType &&
   throw new Error("Bundled server prevents selecting authenticated local CLI when a managed AI subscription expires.");
 }
 console.log("PASS bundled agent binding recovery for locally authenticated CLI");
+const hermesCode = readFileSync(mandatory["Hermes Windows execution adapter"], "utf8");
+if (!hermesCode.includes('model && model !== "auto"') ||
+    !hermesCode.includes('if (cfgBoolean(config.dangerouslySkipPermissions) === true) args.push("--yolo")')) {
+  throw new Error("Bundled Hermes adapter may hang on auto model or bypass command safety approvals.");
+}
+console.log("PASS bundled Hermes uses configured model and opt-in unsafe command permissions");
 if (!readFileSync(mandatory["Arabic web UI"], "utf8").includes('lang="ar"')) {
   throw new Error("Missing Arabic-first UI in packaged server.");
 }

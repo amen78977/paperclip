@@ -73,6 +73,7 @@ jobs:
           pnpm --filter @paperclipai/plugin-sdk exec tsc
           pnpm --filter @paperclipai/ui typecheck
           pnpm exec vitest run ui/src/i18n/interface-labels.test.ts ui/src/pages/Agents.test.tsx ui/src/pages/Auth.test.tsx --maxWorkers=1
+          pnpm exec vitest run packages/adapters/hermes/src/server/execute.onspawn.test.ts packages/adapters/hermes/src/server/execute.instructions.test.ts --maxWorkers=1
           pnpm --filter @paperclipai/ui build
           node scripts/verify-arabic-continuity.mjs
       - name: Update the fork only after all checks pass

@@ -50,6 +50,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pnpm exec vitest run ui/src/i18n/interface-labels.test.ts ui/src/pages/Agents.test.tsx ui/src/pages/Auth.test.tsx --maxWorkers=1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm exec vitest run packages/adapters/hermes/src/server/execute.onspawn.test.ts packages/adapters/hermes/src/server/execute.instructions.test.ts --maxWorkers=1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pnpm --filter @paperclipai/ui build
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-arabic-continuity.mjs

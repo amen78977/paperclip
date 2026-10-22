@@ -24,13 +24,17 @@ describe("Hermes managed instruction delivery (real capture process)", () => {
 
   beforeEach(async () => {
     dir = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-hermes-instructions-"));
-    command = path.join(dir, "hermes.cjs");
+    // Node 24 on Windows cannot directly spawn a .cjs shebang with shell:false
+    // (EFTYPE). Run the fixture through node.exe, using the Hermes subcommand
+    // name as the script, while keeping the captured CLI args identical.
+    command = process.platform === "win32" ? process.execPath : path.join(dir, "hermes.cjs");
     instructionsFilePath = path.join(dir, "instructions.md");
     capturePath = path.join(dir, "invocations.jsonl");
     await fs.writeFile(instructionsFilePath, INSTRUCTIONS);
-    await fs.writeFile(command, `#!${process.execPath}
+    const fixtureScript = process.platform === "win32" ? path.join(dir, "chat") : command;
+    await fs.writeFile(fixtureScript, `#!${process.execPath}
 const fs = require("node:fs");
-const args = process.argv.slice(2);
+const args = ${process.platform === "win32" ? '["chat", ...process.argv.slice(2)]' : 'process.argv.slice(2)'};
 fs.appendFileSync(process.env.CAPTURE_PATH, JSON.stringify({
   args,
   systemPrompt: process.env.HERMES_EPHEMERAL_SYSTEM_PROMPT ?? null,
