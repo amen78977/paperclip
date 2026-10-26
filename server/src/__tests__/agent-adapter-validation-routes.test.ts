@@ -334,6 +334,30 @@ describe("agent routes adapter validation", () => {
     await unregisterTestAdapter(missingAdapterType);
   });
 
+  it("routes narrow roster edits through authorization, config merging and audit history", async () => {
+    const existing = { ...(await mockAgentService.getById()), adapterConfig: { model: "old", cwd: "/workspace" }, runtimeConfig: { heartbeat: { intervalSec: 900 } } };
+    mockAgentService.getById.mockResolvedValue(existing);
+    const app = await createApp();
+    const response = await requestApp(app, base => request(base).patch(`/api/agents/${existing.id}`).send({ runtimeSettings: {
+      harness: "codex_local", model: "new", expected: { model: "old", aiConnection: null },
+    } }));
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+    expect(response.body.adapterConfig).toMatchObject({ model: "new", cwd: "/workspace" });
+    expect(response.body.runtimeConfig).toEqual(existing.runtimeConfig);
+    expect(mockAgentService.update).toHaveBeenCalledWith(existing.id, expect.not.objectContaining({ runtimeSettings: expect.anything() }), expect.objectContaining({ expectedConfiguration: expect.objectContaining({ adapterConfig: existing.adapterConfig }), recordRevision: expect.anything() }));
+    expect(mockLogActivity).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ action: "agent.updated", entityId: existing.id }));
+  });
+
+  it("refuses a roster edit without configuration permission", async () => {
+    mockAccessService.decide.mockResolvedValue({ allowed: false, reason: "deny_missing_grant", explanation: "No configuration permission" });
+    const app = await createApp();
+    const response = await requestApp(app, base => request(base).patch("/api/agents/11111111-1111-4111-8111-111111111111").send({ runtimeSettings: {
+      harness: "codex_local", model: "new", expected: { model: null, aiConnection: null },
+    } }));
+    expect(response.status).toBe(403);
+    expect(mockAgentService.update).not.toHaveBeenCalled();
+  });
+
   afterEach(async () => {
     await unregisterTestAdapter("external_test");
     await unregisterTestAdapter(missingAdapterType);
@@ -1032,6 +1056,24 @@ describe("agent routes adapter validation", () => {
     expect(res.body.details).toMatchObject({ code: "agent_runner_config_incompatible", fields: ["extraArgs"] });
     expect(mockAgentService.update).not.toHaveBeenCalled();
     expect(mockLogActivity).not.toHaveBeenCalled();
+  });
+
+  it("upgrades a legacy Claude agent with a turn limit, warning instead of rejecting it", async () => {
+    const existing = await mockAgentService.getById();
+    const env = { ANTHROPIC_API_KEY: { type: "plain", value: "synthetic-fixture" } };
+    mockAgentService.getById.mockResolvedValue({ ...existing, adapterType: "claude_local",
+      adapterConfig: { model: "claude-opus-5-5", effort: "high", maxTurnsPerRun: 1000,
+        dangerouslySkipPermissions: true, timeoutSec: 0, graceSec: 15, env } });
+    const app = await createApp();
+    const res = await requestApp(app, baseUrl => request(baseUrl)
+      .patch(`/api/agents/${existing.id}`).send({ runner: "paperclip" }));
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    const patch = mockAgentService.update.mock.calls[0][1];
+    expect(patch.adapterType).toBe("paperclip_runner");
+    expect(patch.adapterConfig).toMatchObject({ provider: "acpx", acpxAgent: "claude", model: "claude-opus-5-5",
+      modelReasoningEffort: "high", acpxPermissionMode: "approve-all", timeoutSec: 0, graceSec: 15, env });
+    expect(patch.adapterConfig).not.toHaveProperty("maxTurnsPerRun");
+    expect(res.body.configurationWarnings).toEqual([expect.objectContaining({ field: "maxTurnsPerRun", code: "runner_option_ignored" })]);
   });
 
   it("normalizes legacy skills and permissions when switching to paperclip_runner", async () => {

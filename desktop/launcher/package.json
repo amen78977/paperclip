@@ -1,6 +1,6 @@
 {
   "name": "paperclip-arabic-desktop",
-  "version": "0.1.0",
+  "version": "0.1.27",
   "private": true,
   "author": "Paperclip Arabic Desktop contributors",
   "repository": "https://github.com/paperclipai/paperclip",
@@ -20,21 +20,56 @@
   "build": {
     "appId": "com.paperclip.arabicdesktop",
     "productName": "Paperclip Arabic",
-    "directories": { "output": "../dist-windows" },
-    "files": ["main.cjs", "update-watch.cjs", "auto-update.cjs", "agent-jwt-secret.cjs", "json-request.cjs", "assets/**/*", "package.json", "node_modules/**/*"],
+    "directories": {
+      "output": "../dist-windows"
+    },
+    "files": [
+      "main.cjs",
+      "update-watch.cjs",
+      "auto-update.cjs",
+      "agent-jwt-secret.cjs",
+      "json-request.cjs",
+      "assets/**/*",
+      "package.json",
+      "node_modules/**/*"
+    ],
     "extraResources": [
-      { "from": "../runtime/node.exe", "to": "runtime/node.exe" },
-      { "from": "../runtime/node_modules", "to": "runtime/node_modules", "filter": ["**/*", "!**/*.map"] }
+      {
+        "from": "../runtime/node.exe",
+        "to": "runtime/node.exe"
+      },
+      {
+        "from": "../runtime/node_modules",
+        "to": "runtime/node_modules",
+        "filter": [
+          "**/*",
+          "!**/*.map"
+        ]
+      }
     ],
     "asar": true,
     "npmRebuild": false,
     "win": {
       "icon": "assets/app.ico",
       "signAndEditExecutable": false,
-      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "artifactName": "Paperclip-Arabic-Setup-${version}.${ext}"
     },
-    "publish": [{ "provider": "github", "owner": "amen78977", "repo": "paperclip", "releaseType": "release" }],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "amen78977",
+        "repo": "paperclip",
+        "releaseType": "release"
+      }
+    ],
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,

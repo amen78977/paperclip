@@ -26,6 +26,7 @@ const transcriptState = vi.hoisted(() => ({
   transcriptByRun: new Map(),
   isInitialHydrating: false,
   hydratedRunIds: undefined as Set<string> | undefined,
+  truncatedRunIds: new Set<string>(),
 }));
 const nativeTranscriptState = vi.hoisted(() => ({
   transcriptByRun: new Map(),
@@ -35,6 +36,7 @@ const nativeTranscriptState = vi.hoisted(() => ({
 }));
 const transcriptHookRuns = vi.hoisted(() => ({
   legacy: [] as unknown[][],
+  legacyReadLimits: [] as (number | undefined)[],
   native: [] as unknown[][],
 }));
 const sidebarState = vi.hoisted(() => ({ isMobile: false }));
@@ -51,12 +53,14 @@ const editorCallbacks = vi.hoisted(() => ({ change: (_value: string) => {} }));
 const streamlinedState = vi.hoisted(() => ({ enabled: true }));
 
 vi.mock("@/components/transcript/useLiveRunTranscripts", () => ({
-  useLiveRunTranscripts: ({ runs }: { runs: unknown[] }) => {
+  useLiveRunTranscripts: ({ runs, logReadLimitBytes }: { runs: unknown[]; logReadLimitBytes?: number }) => {
     transcriptHookRuns.legacy.push(runs);
+    transcriptHookRuns.legacyReadLimits.push(logReadLimitBytes);
     return {
       transcriptByRun: new Map(transcriptState.transcriptByRun),
       isInitialHydrating: transcriptState.isInitialHydrating,
       hydratedRunIds: transcriptState.hydratedRunIds,
+      truncatedRunIds: transcriptState.truncatedRunIds,
     };
   },
 }));
@@ -122,11 +126,13 @@ beforeEach(() => {
   transcriptState.transcriptByRun.clear();
   transcriptState.isInitialHydrating = false;
   transcriptState.hydratedRunIds = undefined;
+  transcriptState.truncatedRunIds.clear();
   nativeTranscriptState.transcriptByRun.clear();
   nativeTranscriptState.errorsByRun.clear();
   nativeTranscriptState.hydratedRunIds = undefined;
   nativeTranscriptState.terminalHydratedRunIds = undefined;
   transcriptHookRuns.legacy.length = 0;
+  transcriptHookRuns.legacyReadLimits.length = 0;
   transcriptHookRuns.native.length = 0;
   sidebarState.isMobile = false;
   planState.data = null;
@@ -359,6 +365,37 @@ it.each([true, false])("defers hidden content until history is ready and keeps i
   ).toBeNull();
   expect(container.querySelector('[data-testid="mock-editor"]')).toBe(composer);
   expect(container.querySelector('.task-chat-history-pending')).toBeNull();
+});
+
+it.each([true, false])("keeps cold-open messages readable while history is pending (mobile=%s)", (mobile) => {
+  sidebarState.isMobile = mobile;
+  render(<TaskChatThread issueId="cold-issue" compactHistory initialHistoryPending
+    comments={createLongThreadComments()} historyControl={<button>More messages</button>} onAdd={async () => {}} />);
+  expect(container.querySelector('[data-testid="task-chat-history-loading"]')).toBeNull();
+  expect(container.textContent).toContain("Thread message 1");
+  expect(container.textContent).toContain("More messages");
+  expect(container.querySelector('[data-testid="mock-editor"]')).not.toBeNull();
+});
+
+it.each([0, 32_000, 100_000])("offers earlier output only when a single legacy run exceeds the compact window (%s bytes)", (logBytes) => {
+  const onExpandHistory = vi.fn();
+  if (logBytes > 32_000) transcriptState.truncatedRunIds.add("legacy-run");
+  const props = {
+    issueId: "single-legacy-run", comments: [], onAdd: async () => {}, onExpandHistory,
+    linkedRuns: [{ runId: "legacy-run", agentId: "agent", status: "succeeded", adapterType: "claude_local", runtimeMode: "legacy" as const, createdAt: "2025-01-01T10:00:00Z", startedAt: "2025-01-01T10:00:00Z", logBytes }],
+  };
+  render(<TaskChatThread {...props} compactHistory />);
+  expect(container.textContent).not.toContain("More messages");
+  const outputControl = [...container.querySelectorAll("button")].find((button) => button.textContent === "More run output");
+  expect(Boolean(outputControl)).toBe(logBytes > 32_000);
+  expect(transcriptHookRuns.legacyReadLimits.at(-1)).toBe(32_000);
+  if (outputControl) {
+    act(() => outputControl.click());
+    expect(onExpandHistory).toHaveBeenCalledOnce();
+    render(<TaskChatThread {...props} compactHistory={false} />);
+    expect(container.textContent).not.toContain("More run output");
+    expect(transcriptHookRuns.legacyReadLimits.at(-1)).toBeUndefined();
+  }
 });
 
 it("defers initial history for a saved conversation with its own draft key", () => {
@@ -2389,6 +2426,43 @@ describe("TaskChatThread runtime transcript selection", () => {
       requestKind: "permission_approval", resolution: { action: "decline" } });
   });
 
+  it("dismisses a runtime permission without resolving it and retains the feed action after reload", async () => {
+    const runId = "dismissed-native-permission";
+    nativeTranscriptState.transcriptByRun.set(runId, [
+      { kind: "runtime_request", ts: "2026-08-25T18:00:01.000Z", requestId: "permission-1",
+        requestKind: "permission_approval", turnId: "provider-turn-1", requestType: "permission", status: "pending",
+        prompt: "Pi write", choices: [{ key: "decline", label: "Deny" }], fields: [] },
+    ]);
+    const resolve = vi.spyOn(heartbeatsApi, "resolveRuntimeRequest").mockResolvedValue({} as never);
+    const show = () => renderThread({
+      issueId: "issue-1", currentUserId: "user-board", comments: [], onAdd: async () => {}, issueStatus: "in_progress",
+      activeRun: { id: runId, runtimeMode: "native", status: "running", invocationSource: "issue", triggerDetail: null,
+        startedAt: "2026-08-25T18:00:00.000Z", finishedAt: null, createdAt: "2026-08-25T18:00:00.000Z",
+        agentId: "agent-1", agentName: "Runner", adapterType: "paperclip_runner" },
+    });
+    show();
+    const takeover = () => container.querySelector('[data-testid="task-chat-composer-takeover"]');
+    await act(async () => takeover()!.querySelector<HTMLButtonElement>('[aria-label^="Dismiss "]')!.click());
+    expect(resolve).not.toHaveBeenCalled();
+    expect(takeover()).toBeNull();
+    expect(container.querySelector('[data-testid="task-chat-pending-input-indicator"]')).toBeNull();
+    flushSync(() => root!.unmount());
+    root = createRoot(container);
+    show();
+    expect(takeover()).toBeNull();
+    expect(container.querySelector('[data-testid="task-chat-pending-input-indicator"]')).toBeNull();
+    await act(async () => {
+      const details = container.querySelector<HTMLDetailsElement>('[data-testid="task-chat-pending-runtime-request"]')!;
+      details.open = true;
+      details.dispatchEvent(new Event("toggle", { bubbles: true }));
+    });
+    const deny = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent === "Deny");
+    expect(deny).toBeDefined();
+    await act(async () => deny!.click());
+    expect(resolve).toHaveBeenCalledWith({ runId, requestId: "permission-1", turnId: "provider-turn-1",
+      requestKind: "permission_approval", resolution: { action: "decline" } });
+  });
+
   it("labels the live tail as a continuation after the steering bubble", () => {
     nativeTranscriptState.transcriptByRun.set("native-live-steered", [
       assistantEntry("2026-08-25T18:00:01.000Z", "Work before steering.", "progress"),
@@ -3327,6 +3401,74 @@ describe.each([true, false])("Unanswered question history (conversationMode=%s)"
     expect(takeover()?.textContent).toContain("Approve the note?");
   });
 
+  it.each(["request_confirmation", "request_checkbox_confirmation", "request_item_verdicts", "suggest_tasks"] as const)("keeps dismissed %s in the feed through reload", async kind => {
+    const fixtures = await import("@/fixtures/issueThreadInteractionFixtures");
+    const source = {
+      request_confirmation: fixtures.genericPendingRequestConfirmationInteraction,
+      request_checkbox_confirmation: fixtures.pendingRequestCheckboxConfirmationInteraction,
+      request_item_verdicts: fixtures.pendingRequestItemVerdictsInteraction,
+      suggest_tasks: fixtures.pendingSuggestedTasksInteraction,
+    }[kind];
+    const request = { ...source, id: "deferred-request", title: "Review requested" };
+    const onDismissInteraction = vi.fn().mockResolvedValue(undefined);
+    const show = () => render(<TaskChatThread {...props} comments={[]} interactions={[request]} onDismissInteraction={onDismissInteraction} />);
+    show();
+    expect(takeover()).not.toBeNull();
+    await dismiss();
+    expect(onDismissInteraction).toHaveBeenCalledWith(request);
+    expect(takeover()).toBeNull();
+    expect(pendingIndicator()).toBeNull();
+    flushSync(() => root!.unmount());
+    root = createRoot(container);
+    show();
+    expect(takeover()).toBeNull();
+    expect(pendingIndicator()).toBeNull();
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Open request: Review requested"]')!.click());
+    expect(takeover()).not.toBeNull();
+  });
+
+  it("honors a saved dismissal on another browser and surfaces save failures", async () => {
+    const review = { ...planReviewInteraction(), title: "Review requested", payload: { version: 1, prompt: "Review the work?" } } as IssueThreadInteraction;
+    render(<TaskChatThread {...props} comments={[]} interactions={[{ ...review, dismissedAt: new Date() }]} />);
+    expect(takeover()).toBeNull();
+    expect(pendingIndicator()).toBeNull();
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Open request: Review requested"]')!.click());
+    const onDismissInteraction = vi.fn().mockRejectedValue(new Error("Dismissal could not be saved"));
+    render(<TaskChatThread {...props} comments={[]} interactions={[review]} onDismissInteraction={onDismissInteraction} />);
+    await dismiss();
+    expect(takeover()).not.toBeNull();
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Dismissal could not be saved");
+  });
+
+  it("keeps the newly opened request visible when an earlier dismissal finishes saving", async () => {
+    const { genericPendingRequestConfirmationInteraction } = await import("@/fixtures/issueThreadInteractionFixtures");
+    const first = { ...genericPendingRequestConfirmationInteraction, id: "first-review", title: "First review" };
+    const second = { ...first, id: "second-review", title: "Second review" };
+    let finishDismiss!: () => void;
+    const onDismissInteraction = vi.fn(() => new Promise<void>(resolve => { finishDismiss = resolve; }));
+    render(<TaskChatThread {...props} comments={[]} interactions={[first, second]} onDismissInteraction={onDismissInteraction} />);
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Open request: First review"]')!.click());
+    await dismiss();
+    expect(onDismissInteraction).toHaveBeenCalledWith(first);
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Open request: Second review"]')!.click());
+    expect(takeover()?.textContent).toContain("Second review");
+    await act(async () => finishDismiss());
+    expect(takeover()?.textContent).toContain("Second review");
+    expect(takeover()?.textContent).not.toContain("First review");
+  });
+
+  it("keeps a reopened dismissed review visible when a delayed human comment refresh arrives", async () => {
+    const { genericPendingRequestConfirmationInteraction } = await import("@/fixtures/issueThreadInteractionFixtures");
+    const review = { ...genericPendingRequestConfirmationInteraction, title: "Reopened review" };
+    const show = (comments = movedOn.slice(0, 0)) => render(<TaskChatThread {...props} comments={comments} interactions={[review]} />);
+    show();
+    await dismiss();
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Open request: Reopened review"]')!.click());
+    expect(takeover()?.textContent).toContain("Reopened review");
+    await act(async () => show(movedOn));
+    expect(takeover()?.textContent).toContain("Reopened review");
+  });
+
   it("opens the new question but can reopen the exact historical native question", async () => {
     const nativeOld = { ...old, sourceRunId: "old-run", payload: { ...old.payload, runtimeRequestId: "old-request" } } as IssueThreadInteraction;
     render(<TaskChatThread {...props} comments={movedOn} interactions={[nativeOld, newer]} />);
@@ -3420,7 +3562,7 @@ describe("TaskChatThread composer alignment", () => {
 
     const dock = container
       .querySelector('[data-testid="mock-editor"]')
-      ?.closest("div.sticky") as HTMLElement | null;
+      ?.closest('[data-testid="task-chat-composer-dock"]') as HTMLElement | null;
 
     expect(dock?.className).toContain("w-full");
     expect(dock?.className).toContain("max-w-(--tc-shell-max-w)");
@@ -4204,26 +4346,22 @@ describe("TaskChatThread Paperclip Runner queue", () => {
   });
 });
 
-describe("TaskChatThread mobile composer dock (PAP-495)", () => {
-  it("pins the composer to the nav-aware bottom offset so its action row clears the auto-hiding bottom nav", () => {
+describe("TaskChatThread mobile composer dock", () => {
+  it("scrolls messages independently of the composer on mobile", () => {
     sidebarState.isMobile = true;
 
     renderThread({
-      comments: [],
+      comments: createLongThreadComments(),
       onAdd: async () => {},
       draftKey: "task-chat-draft:issue-mobile",
     });
 
-    const dock = container
-      .querySelector('[data-testid="mock-editor"]')
-      ?.closest("div.sticky") as HTMLElement | null;
-
+    const dock = container.querySelector('[data-testid="task-chat-composer-dock"]');
+    const scroller = container.querySelector('[data-testid="task-chat-scroller"]');
     expect(dock).not.toBeNull();
-    // Bottom offset comes from --tc-composer-bottom (Layout raises it to the nav
-    // height while the nav is on screen) — NOT the raw safe-area dock, which is
-    // what let the nav occlude the action row before PAP-495.
-    expect(dock?.className).toContain("bottom-(--tc-composer-bottom)");
-    expect(dock?.className).not.toContain("bottom-(--sz-calc-8)");
+    expect(scroller).not.toBeNull();
+    expect(scroller?.textContent).toContain("Thread message 1");
+    expect(scroller?.contains(dock)).toBe(false);
   });
 });
 

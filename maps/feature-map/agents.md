@@ -41,6 +41,27 @@ existing preparation and verification lifecycle.
 
 Open `/agents/:agentId` and the configuration/instruction surfaces it exposes.
 
+For a low-trust agent, open **Permissions / Trust → Allowed projects**. An operator
+with agent-management permission can select additional projects and explicitly
+save them. Existing projects and other containment restrictions remain intact.
+Cancel discards the draft; a failed save retains it. Reload to verify persistence.
+This does not start or retry a task.
+
+In `/agents/all`, select roster checkboxes and choose **Edit connection & model**.
+A mixed selection offers one action per harness. Each field is opt-in. The editor
+previews each changed value and excludes agents already at the target value.
+Models must be compatible with every selected connection. Failed writes show
+per-agent errors; Retry touches only the remaining agents. Connection pools and
+externally managed agents are not editable through this shortcut.
+
+Verify connection-only, model-only, both fields, mixed-harness selection, hidden
+selections, no-op counts, incompatible models, partial failure and retry. Reload
+the roster and compare stored settings, including unrelated heartbeat and adapter
+fields. A concurrent configuration edit must return a conflict. Shared runtime
+validation, access checks, revisions and audit logging still apply. Live runs
+retain their existing settings; model changes can reset saved sessions. Connection
+adoption can require an explicit reset of existing sessions.
+
 ### `organization`
 
 Use the roster’s organization view; `/org` redirects to the roster in the streamlined shell.
@@ -107,6 +128,14 @@ from the hiring picker; API fixture creation does not prove this UI journey.
 
 Automated: [instruction service](../../server/src/__tests__/agent-instructions-service.test.ts) and [instruction revisions](../../server/src/__tests__/agent-instruction-revisions.test.ts) cover file/revision contracts.
 
+The [AI account field regression](../../ui/src/components/ai-connections/AiConnectionField.test.tsx)
+checks duplicate provider names, account identity in choices and adoption confirmation,
+the exact selected grant, and disabled unavailable accounts with authorized metadata fixtures.
+Manually compare a personal API key and shared subscription with the same name in
+Harness / Runtime. Confirm their method, scope and available identity before saving.
+Reload the saved choice and verify the next eligible task uses it; labels alone
+do not establish credential validity or change account access.
+
 Manual: Save a harmless instruction edit, reload, and verify its revision and effect in the next eligible run. Pause and resume the disposable agent; confirm pause prevents new work and does not erase previous runs.
 
 For failed setup, use an unavailable model or invalid command on a disposable agent.
@@ -116,16 +145,22 @@ retry, and reload; the failure must disappear only after readiness commits.
 Provider output and credentials must not appear in the lifecycle message.
 
 An explicit runner change is a configuration change, with normal revisions and
-session invalidation. Incompatible settings must produce a field-specific error;
-selecting another runner must not silently discard them or change an active run's
+session invalidation. Obsolete Claude tuning options (including maxTurnsPerRun) are ignored with a field-specific warning;
+permission, network, filesystem and command incompatibilities still produce an error.
+Selecting another runner must not silently discard security settings or change an active run's
 recorded execution. Keep runner choice in Advanced and verify the next eligible
 run separately from historical transcripts.
 
-Existing legacy Claude and Codex agents on qualified default environments also
-show **Upgrade runner** above their configuration. Exercise that action with
-pending edits and an environment-variable draft; reopen the page and compare the
+Existing legacy Claude and Codex agents on qualified default environments, or
+probe-capable Daytona snapshots / immutable sandbox images, show **Upgrade runner** above their configuration. Verify a company owner with `agents:configure` and no instance-admin role can qualify the saved computer and upgrade. A caller without configuration permission must be denied before a probe starts. Exercise that action with
+pending edits and an environment-variable draft. An unsaved change to a different
+effective computer must disable the action and explain that the computer change
+must be saved first; restoring the saved target must re-enable it. Reopen the page and compare the
 saved harness, model, account bindings, instructions, and run policy. Check a
-rejected incompatible setting, repair it, and retry. Verify a real task before
+saved `maxTurnsPerRun: 1000`: upgrade must warn and remove it. Test an initially
+unqualified Daytona Paperclip Computer: click must probe, record qualification,
+refresh availability, and only then save. A failed probe or changed selection must
+leave the agent on Legacy. Check a rejected permission setting, repair it, and retry. Verify a real task before
 and after migration, including its output, preserved history, and fresh session.
 The notice must stay absent for native agents, other harnesses, and unsupported
 targets. Discovery failure must not imply that an upgrade is available.
