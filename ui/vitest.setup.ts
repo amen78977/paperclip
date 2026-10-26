@@ -31,6 +31,13 @@ if (typeof window !== "undefined" && window.localStorage !== globalThis.localSto
   installStorageMock(window as unknown as Record<string, unknown>);
 }
 
+// Upstream interaction tests assert English copy. Model an explicit saved
+// preference before i18n initializes; Arabic tests select their own language.
+// This leaves the shipped Arabic default and RTL behavior unchanged.
+if (typeof window !== "undefined") {
+  window.localStorage.setItem("paperclip.ui.language", "en");
+}
+
 // jsdom does not implement Element.prototype.scrollIntoView. Several surfaces
 // (e.g. IssueChatThread's auto-scroll-to-latest) call it during normal render,
 // so provide a no-op default. Tests that assert on scroll behaviour override

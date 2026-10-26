@@ -1,6 +1,7 @@
 "use strict";
 
 const https = require("node:https");
+const { requestJson } = require("./json-request.cjs");
 
 // Only releases of the Arabic fork are compatible with this Arabic Windows app.
 // Never offer installation of an official upstream English runtime in its place.
@@ -38,32 +39,13 @@ function parseArabicRelease(release, repo) {
     return { version, url: url.origin + url.pathname };
   } catch { return null; }
 }
-function getLatestRelease({ repo = RELEASE_REPO, timeoutMs = 6000 } = {}) {
-  if (!/^[a-z0-9_.-]+\/[a-z0-9_.-]+$/i.test(repo)) return Promise.resolve(null);
-  return new Promise((resolve) => {
-    let finished = false;
-    const done = (value) => { if (!finished) { finished = true; resolve(value); } };
-    const req = https.get({
+async function getLatestRelease({ repo = RELEASE_REPO, timeoutMs = 6000, httpClient = https } = {}) {
+  if (!/^[a-z0-9_.-]+\/[a-z0-9_.-]+$/i.test(repo)) return null;
+  const release = await requestJson({
       hostname: "api.github.com",
       path: `/repos/${repo}/releases/latest`,
       headers: { Accept: "application/vnd.github+json", "User-Agent": "Paperclip-Arabic-Desktop" },
-      timeout: timeoutMs,
-    }, (res) => {
-      if (res.statusCode !== 200) { res.resume(); done(null); return; }
-      let buffer = "";
-      res.setEncoding("utf8");
-      res.on("data", (chunk) => {
-        if (buffer.length + chunk.length > 150_000) { req.destroy(); done(null); }
-        else buffer += chunk;
-      });
-      res.on("end", () => {
-        try {
-          done(parseArabicRelease(JSON.parse(buffer), repo));
-        } catch { done(null); }
-      });
-    });
-    req.on("timeout", () => { req.destroy(); done(null); });
-    req.on("error", () => done(null));
-  });
+  }, { httpClient, timeoutMs, maxBytes: 150_000 });
+  return parseArabicRelease(release, repo);
 }
 module.exports = { RELEASE_REPO, RETRY_AFTER_MS, isNewerVersion, parseArabicRelease, getLatestRelease };

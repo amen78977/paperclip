@@ -2,7 +2,7 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const { EventEmitter } = require("node:events");
-const { canRestartWithoutInterruptingAgents, startAutomaticUpdates } = require("./auto-update.cjs");
+const { createPreInstallBackup, canRestartWithoutInterruptingAgents, startAutomaticUpdates } = require("./auto-update.cjs");
 
 const companyId = "038e6547-26c2-4f68-b0ff-08da6314a44c";
 const flush = () => new Promise((r) => setTimeout(r, 5));
@@ -110,4 +110,43 @@ test("unexpected run states and API errors block automatic restarts", async () =
   assert.equal(await canRestartWithoutInterruptingAgents({ fetchJson: fetcher("running") }), false);
   assert.equal(await canRestartWithoutInterruptingAgents({ fetchJson: fetcher("future_new_state") }), false);
   assert.equal(await canRestartWithoutInterruptingAgents({ fetchJson: fetcher(null) }), false);
+});
+
+test("user activity during the asynchronous agent check cancels idle installation", async () => {
+  let idle = 31 * 60;
+  const updater = updaterFixture();
+  const updates = fixture(updater, {
+    idleSeconds: () => idle,
+    safeToRestart: async () => { idle = 0; return true; },
+  });
+  try {
+    await updates.check();
+    updater.emit("update-downloaded", { version: goodRelease.version });
+    await flush();
+    assert.equal(updater.installCalls, 0);
+    assert.equal(await updates.installIfIdle(), false);
+  } finally { updates.stop(); }
+});
+
+test("an interrupted backup response settles as failure instead of hanging", async () => {
+  const response = new EventEmitter();
+  response.statusCode = 201;
+  const request = new EventEmitter();
+  request.destroy = () => {};
+  request.end = () => queueMicrotask(() => {
+    callback(response);
+    response.emit("data", '{"startedAt":');
+    response.emit("aborted");
+    response.emit("close");
+  });
+  let callback;
+  const httpClient = { request: (_options, handler) => { callback = handler; return request; } };
+  let timer;
+  try {
+    const result = await Promise.race([
+      createPreInstallBackup({ httpClient }),
+      new Promise((resolve) => { timer = setTimeout(() => resolve("unsettled"), 100); }),
+    ]);
+    assert.equal(result, false);
+  } finally { clearTimeout(timer); }
 });

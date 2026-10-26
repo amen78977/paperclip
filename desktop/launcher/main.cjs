@@ -5,7 +5,7 @@ const { autoUpdater } = require("electron-updater");
 const { spawn } = require("node:child_process");
 const { existsSync, readFileSync, appendFileSync, mkdirSync } = require("node:fs");
 const path = require("node:path");
-const http = require("node:http");
+const { requestJson } = require("./json-request.cjs");
 const { startAutomaticUpdates } = require("./auto-update.cjs");
 const { getOrCreateAgentJwtSecret } = require("./agent-jwt-secret.cjs");
 
@@ -50,22 +50,11 @@ function bundledPaths() {
   return { node, cli: path.join(cliDir, entry), runtime };
 }
 
-function httpHealth(timeout = 1500) {
-  return new Promise((resolve) => {
-    const req = http.get(`${ORIGIN}${HEALTH_PATH}`, { timeout }, (res) => {
-      let body = "";
-      res.setEncoding("utf8");
-      res.on("data", (chunk) => { if (body.length < 65536) body += chunk; });
-      res.on("end", () => {
-        try {
-          const status = JSON.parse(body);
-          resolve(res.statusCode === 200 && status?.status === "ok" && Boolean(status?.version));
-        } catch { resolve(false); }
-      });
-    });
-    req.on("timeout", () => req.destroy());
-    req.on("error", () => resolve(false));
+async function httpHealth(timeout = 1500) {
+  const status = await requestJson({ hostname: HOST, port: PORT, path: HEALTH_PATH }, {
+    timeoutMs: timeout, maxBytes: 65536,
   });
+  return status?.status === "ok" && Boolean(status?.version);
 }
 
 function launchCli(command, extra, options = {}) {

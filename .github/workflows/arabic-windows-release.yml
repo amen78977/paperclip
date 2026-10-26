@@ -48,7 +48,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pnpm --filter @paperclipai/ui typecheck
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          pnpm exec vitest run ui/src/i18n/interface-labels.test.ts ui/src/pages/Agents.test.tsx ui/src/pages/Auth.test.tsx --maxWorkers=1
+          pnpm exec vitest run ui/src/i18n/index.test.ts ui/src/i18n/interface-labels.test.ts ui/src/i18n/locale-validation.test.ts ui/src/components/OnboardingWizard.test.tsx ui/src/pages/Agents.test.tsx ui/src/pages/Auth.test.tsx --maxWorkers=1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pnpm exec vitest run packages/adapters/hermes/src/server/execute.onspawn.test.ts packages/adapters/hermes/src/server/execute.instructions.test.ts --maxWorkers=1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -73,7 +73,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm install --prefix desktop/launcher
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node --test desktop/launcher/update-watch.test.cjs desktop/launcher/auto-update.test.cjs desktop/launcher/agent-jwt-secret.test.cjs
+          node --test desktop/launcher/update-watch.test.cjs desktop/launcher/auto-update.test.cjs desktop/launcher/agent-jwt-secret.test.cjs desktop/launcher/json-request.test.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $version = "0.1.${{ github.run_number }}"
           npm pkg set "version=$version" --prefix desktop/launcher

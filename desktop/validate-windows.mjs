@@ -53,7 +53,7 @@ if (!/provider:\s*github/.test(feed) || !/owner:\s*amen78977/.test(feed) || !/re
 const launcherRequire = createRequire(path.join(root, "desktop", "launcher", "package.json"));
 const { listPackage } = launcherRequire("@electron/asar");
 const packedFiles = listPackage(mandatory["Electron app.asar"]).map((p) => p.replaceAll("\\", "/"));
-for (const required of ["/auto-update.cjs", "/update-watch.cjs", "/agent-jwt-secret.cjs", "/node_modules/electron-updater/out/main.js"]) {
+for (const required of ["/auto-update.cjs", "/update-watch.cjs", "/agent-jwt-secret.cjs", "/json-request.cjs", "/node_modules/electron-updater/out/main.js"]) {
   if (!packedFiles.some((p) => p.endsWith(required))) {
     throw new Error(`Missing critical auto-update module from the real Electron app.asar: ${required}`);
   }
