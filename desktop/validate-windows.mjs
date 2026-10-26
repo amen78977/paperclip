@@ -79,6 +79,9 @@ if (!masterBoundary.includes('function stripServerOnlyAgentSecrets(env)') ||
 }
 console.log("PASS agent child process environments exclude master server signing secrets");
 const openCodePermissionCode = readFileSync(mandatory["OpenCode Windows permission adapter"], "utf8");
+if (!openCodePermissionCode.includes('dereference: process.platform === "win32"')) {
+  throw new Error("Bundled OpenCode cannot copy linked Windows configuration without extra privileges.");
+}
 if (!openCodePermissionCode.includes("Read-only managed AGENTS.md external-directory compatibility") ||
     openCodePermissionCode.includes('if (!skipPermissions) {\n        return {\n            env: input.env,\n            notes: [],')) {
   throw new Error("Bundled OpenCode cannot safely read its managed instructions without approval bypass.");
