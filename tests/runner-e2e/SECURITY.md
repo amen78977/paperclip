@@ -1,5 +1,26 @@
 # Runner E2E security for a public repository
 
+[Cloud Product journey bundles](PRODUCT-JOURNEYS.md) are always private and
+rejected by public history publication. Authentication uses an isolated browser
+context without saved storage state or auth tracing. Only closed error codes
+and normalized operations receipts cross the private target-provider boundary.
+The private Cloud repository owns operator credentials, conditional S3 leases,
+ownership manifests, cleanup recovery, and environment-protected CI dispatch.
+
+Cloud onboarding retains only the independently checked synthetic
+`connection-proof.json` download (at most 4 KiB) and its closed oracle receipt
+inside private normalized results. The receipt contains generated numeric inputs,
+their expected four-field result, exact base64 download bytes, checksums, size,
+and attachment/run IDs. Extra fields and arbitrary agent output are rejected.
+It contains no credentials, browser state, request headers, or provider text.
+
+The optional `onboardingConnect` diagnostic is also a closed, versioned receipt.
+It retains only a known checkpoint, response states, HTTP statuses, known adapter
+names, and allowlisted outcome/check/server codes (at most 32 checks per response).
+Unknown codes become `unrecognized`; raw bodies, messages, URLs, headers, and
+browser errors are excluded. Reports validate the receipt before rendering its
+explicit fields, and historical results may omit it.
+
 ## Attended connection authentication
 
 See [PROVIDER-CONNECTIONS.md](PROVIDER-CONNECTIONS.md) for the explicit-only
@@ -32,13 +53,17 @@ changes.
 
 ## GitHub authorization
 
-The Everyday remote Codex restart oracle reads only the existing public run,
+The Everyday remote native restart oracle reads only the existing public run,
 event, environment-lease, workspace-operation and recovery APIs. It does not
 execute commands in a provider sandbox or signal a provider process. Its new
 evidence projects closed receipt metadata and hashes the provider sandbox ID
 and full native event content. Provider text, tool arguments and command output
 do not enter these snapshots. Existing image admission, credentials, billing,
 retention and cleanup rules continue to apply.
+The isolated server's private restart request may delay its replacement by at
+most five minutes. This fault injection never stops a hosted instance or a
+provider sandbox. The explicit Daytona continuity suite has one attempt and
+1,000-cent company and agent hard stops.
 
 Set `RUNNER_E2E_ALLOWED_ACTOR_IDS` to a non-empty JSON array of numeric GitHub
 user IDs. Keep the list equal to the owners of `.github/**` in
@@ -104,8 +129,12 @@ and account identifiers inside its JSON join the evidence redaction set. The
 subscription suite remains manual-only and never falls back to `XAI_API_KEY`.
 
 Create `runner-e2e-paid`, restrict deployments to the default branch, and put
-only `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, `XAI_API_KEY`, and
-`DAYTONA_API_KEY` in it. `KIMI_MODEL_API_KEY` remains a local-only catalog name
+only provider credentials needed by the selected paid suites, including
+`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, `XAI_API_KEY`,
+`COPILOT_GITHUB_TOKEN` and `DAYTONA_API_KEY` in it. Copilot is passed only to
+cells selecting `credentialName: COPILOT_GITHUB_TOKEN`, in the paid Product or
+direct-protocol execution step. Never expose it to ordinary PR, build, catalog,
+image or report jobs. `KIMI_MODEL_API_KEY` remains a local-only catalog name
 for pending explicit profiles and is intentionally absent from the workflow
 environment. Product E2E pending-profile admission remains gated separately.
 Do not duplicate these credentials as repository- or
@@ -416,6 +445,66 @@ Two passive seed cases support browser list assertions; screenshots remain on
 the exact primary case/task routes and document dialogs preserve that case URL.
 The public screenshot allowlist is unchanged.
 
+## Eval feedback capture
+
+`snapshots/agent-feedback.json` retains company-wide complaint/suggestion bodies
+and attributed invocation outcomes in the access-controlled Actions artifact.
+It passes the existing credential scanner and is excluded from public history
+like other snapshots. Normalized results and campaign attempt receipts contain
+only numeric counts, closed collection statuses, and SHA-256 fingerprints for
+review grouping. Public reports never copy feedback bodies, previews, tool
+arguments, or free-form collection errors. Collecting feedback performs no new
+model call and does not forward it to an external service.
+
+Feedback capture retains at most 1,000 full entries and 8 MiB of serialized
+entries/invocations per attempt. Event inspection stops at 10,000 events or
+16 MiB of serialized event data. Limits produce partial collection and a closed
+`evidence_limit_reached` diagnostic; omitted evidence is never reported as absent.
+Checkpoints are considered every ten details, at page boundaries, and at stage
+completion; geometric data growth bounds repeated writes. Reads stop before the
+overall deadline, reserving up to five seconds (20% of shorter windows) to persist
+the collected prefix. Persistence shares the overall collection deadline and
+receives an abort signal. The fixture writes an abortable temporary
+snapshot before replacing the last complete checkpoint, so a stalled write does
+not overwrite earlier evidence with a partially written JSON file.
+Review counts and fingerprints advance only after a checkpoint succeeds. A later
+write failure or expired deadline retains the last saved bodies and marks coverage
+incomplete.
+
+Braintrust export requires an explicit eval project UUID. Native capture includes
+prompts, responses, and tool content only after that opt-in configures the isolated
+company's observability destination. The ingestion credential crosses the public API via
+Node fetch, outside Playwright tracing, and is included in launcher evidence
+redaction. Orchestration spans contain identifiers, phase timing, outcome, and
+feedback counts; they never contain provider credentials or feedback bodies.
+
+With a bounded operations manifest, the ingestion credential is an expiring
+per-attempt relay token. The organization-wide Braintrust key stays in the
+controller. Only authenticated POSTs to the relay's trace/log ingest paths are
+allowed, with a fixed HTTPS upstream and redirects disabled. Header and payload
+`braintrust.parent` values must reference the selected project. Duplicate protobuf
+singular/oneof fields are refused, and JSON is canonicalized to remove duplicate
+key ambiguity. The token cannot call model, read, delete, or other API endpoints;
+it can still write records within the selected project until its finite request,
+byte or time allowance is exhausted. It is not an attempt-level row permission.
+
+The worker environment removes upstream provider/Braintrust credentials before
+inserting the model and OTLP relay tokens. Ambient relay URLs are discarded, and
+the fixture server receives the selected endpoint through company settings.
+Both tokens participate in evidence redaction. Private OTLP receipts retain
+metadata only, and persistence errors stop further admission. The relay closes
+with the model gateway before controller finalization. The controller's direct
+finalization export and tracing without an operations manifest retain the
+existing direct credential path. Remote relay publication is not enabled here.
+
+The bounded operations manifest is credential-free and private. Its parent-owned
+loopback gateway uses an ephemeral per-attempt token. Upstream credentials stay
+in the launcher, are included in secret scans, and are removed from the child
+provider environment. Only the selected Responses or Messages endpoint is
+forwarded to a fixed provider or Braintrust HTTPS origin; request headers do not
+select arbitrary destinations. Gateway response caching and fallback are refused.
+Request journal and usage receipts contain no prompt/response bodies or keys.
+The manifest, journal, and receipts are not public report projections.
 
 ## Configured repository and conversion proof
 

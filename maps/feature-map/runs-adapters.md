@@ -28,6 +28,9 @@ Open an agent’s model/adapter configuration or the instance adapter settings p
 ### `run-history`
 
 Open an agent run at `/agents/:agentId/runs/:runId` from the agent or task activity.
+The agent header has one Run now action. Administrators can enable
+Capture raw provider traces under the agent configuration’s Debugging section
+for future runs. The header shows Raw tracing on while that setting is enabled.
 
 For latency diagnosis with an operator OTLP endpoint, search the hashed run ID
 without restricting the root span name. Compare workspace preparation with its
@@ -35,6 +38,9 @@ without restricting the root span name. Compare workspace preparation with its
 `controller.startup.<phase>`. A recovery pause or deployment drain is not model
 execution time. See the [tracing contract](../../doc/observability.md#controller-preparation-phases).
 These source-level diagnostics do not establish a live response-time budget.
+`task.time_to_first_token` measures accepted ingress through the first committed
+text that the task transcript can show, including thinking and completed
+responses. It includes preparation and startup, and excludes browser latency.
 Inspect `native.controller.<phase>` for backend construction, assigned-tool
 discovery and post-turn cleanup. Compare those intervals with the actual model
 turn; do not count a nested discovery interval twice.
@@ -42,6 +48,25 @@ turn; do not count a nested discovery interval twice.
 ## Driving it with Playwright and the Paperclip CLI
 
 Preconditions: follow the [baseline](./README.md#before-driving-a-journey). Record adapter, model, account, native/legacy runtime, and environment. Capabilities vary; one harness result is not a matrix-wide qualification.
+
+### `session`
+
+For `runs-adapters/session`, complete a task in a disposable warm sandbox and
+retain its saved workspace file. Let the warm session close normally and verify
+that the retained lease has a complete, lease-bound harness backup before
+injecting sandbox loss. Removing a still-warm sandbox before that checkpoint
+exercises the separate acquisition safety gate, which must remain blocked.
+Use a board-authorized session reset, then remove only that fixture's inactive
+provider sandbox. Send a follow-up that
+reads the retained file and appends one new line. Verify a replacement sandbox,
+a new provider session, the exact file contents, successful finalization and no
+stranded task lock. Send another follow-up and verify ordinary session reuse.
+
+Repeat without resetting the session: its replacement must restore verified
+history or remain blocked. Missing backup state must not silently start an
+existing session again. The [executor controls](../../server/src/services/native-runtime/native-session-executor.test.ts)
+cover the bootstrap identity, activity and atomic directory claim; those
+controls do not establish live provider acceptance.
 
 ### `adapter-setup`
 
@@ -51,7 +76,21 @@ Claude native setup uses the existing Anthropic API-key or subscription connecti
 flow. Record the selected account separately from successful execution; unavailable
 models/authentication and unsupported Legacy-only options must fail visibly.
 
+Claude CLI tests and runs also prepare a compatible private executable when a
+managed sandbox image's default CLI is too old for the selected model. Verify
+the command used for the hello test and task, reuse of a compatible private
+installation, and a blocking failure when installation cannot establish a valid
+version. Local, SSH and explicit custom commands retain operator management.
+Cloud onboarding must not offer shell commands the customer cannot run.
+
 Manual: Select the intended adapter and account, refresh model choices, and run its environment test. Save, reload, then execute a small task. Repeat with a deliberately unavailable account and verify the failure remains visible.
+
+For Legacy Codex, assign a service secret such as `SLACK_BOT_TOKEN` through agent
+configuration and run a task that checks its presence without printing its value.
+Check both ACP and CLI execution. Remove the binding and repeat on the next run.
+The assigned secret must reach shell tools; an unassigned host token and Codex's
+own login keys must remain unavailable. Verify the same delivery without an
+agent identity. Shell-policy metadata must contain names rather than values.
 
 Choose Codex as the harness; the UI displays its name/icon for both runners.
 Advanced identifies the automatic default and offers Paperclip Runner or Legacy.
@@ -106,6 +145,16 @@ is released before failure returns. Repeat a warm follow-up and retain its actua
 reply time. The [executor controls](../../server/src/services/native-runtime/native-session-executor.test.ts)
 cover ordering, failure drain and credential projection; they do not qualify a
 live response-time target.
+For native OpenCode with assigned connections, inspect the provider tool surface
+on both local and sandbox execution. It should contain bounded assigned-tool
+search/call schemas. Discover an allowed tool, call its returned alias, revoke
+its grant, and confirm discovery and execution enforce that revocation. Repeat
+in planning/ask mode with a write tool and confirm denial. The controller must
+retain the assigned gateway URL and token. An older direct-catalog OpenCode
+checkpoint must refresh without changing another provider's fingerprint. The
+[assigned-tool](../../server/src/services/native-runtime/assigned-mcp-tools.test.ts)
+and executor controls cover source behavior; live sandbox discovery and a real
+call remain separate acceptance evidence.
 Missing dependencies, failed authentication, invalid models and
 incompatible custom settings must remain actionable errors without silent runner
 switching. Saved unchanged execution can still be tested without applying new
@@ -141,6 +190,17 @@ a separate acceptance requirement.
 Automated: [live run routes](../../server/src/__tests__/agent-live-run-routes.test.ts) and [run event sequencing](../../server/src/__tests__/heartbeat-run-event-sequencing.test.ts) cover run data contracts.
 
 Manual: Start a disposable task, open its running transcript, and follow it to a terminal outcome. Reload and compare task/run IDs, status, output, and cost. Verify a failed run remains distinguishable from a completed run with useful output.
+
+For Legacy OpenCode on a disposable Linux sandbox, run a Bash tool that reads
+`/proc/self/oom_score_adj` and its parent's score. The tool should report `1000`;
+OpenCode should retain its original score. Repeat with an operator `BASH_ENV`
+and confirm that it takes precedence. Repeat with a linked operator plugins
+directory; it must remain unchanged, and the uploaded runtime must contain a
+real plugins directory with the guard and existing plugins. Under controlled memory pressure, record
+the cgroup OOM counters and verify that a killed tool can return an error while
+the agent continues. Local and SSH execution must keep their original shell
+environment. See the [adapter contract](../../docs/adapters/overview.md#opencode-sandbox-memory-pressure).
+These controls do not guarantee that every memory exhaustion preserves the agent.
 
 An explicit runner change starts a configuration revision and invalidates the
 eligible session. Active runs, restart recovery and historical transcript parsing

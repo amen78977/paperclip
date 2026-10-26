@@ -114,6 +114,26 @@ remaining operations before qualifying the whole capability.
 Gaps: Environment test path checks creation/configuration policy; missing provider auth
 must use its owner setup flow.
 
+Scoped source-only Claude CLI preparation: both the selected environment test
+and normal CLI execution use
+[versioned sandbox preparation](../../packages/adapters/claude-local/src/server/sandbox-cli-version.ts).
+An outdated default sandbox command can use a private pinned compatible CLI;
+local, SSH and custom commands are not replaced. The selected model, engine,
+account and existing actor/company checks remain authoritative. Installer
+failure cannot turn an incompatible CLI into a passing probe. Local subprocess
+controls exercise version checks and installer outcomes; live agent and
+subscription access are `not-run` for this change.
+
+Scoped Legacy Codex shell delivery: resolved task configuration can explicitly
+assign service-secret variables to shell tools through ACP or CLI execution.
+The existing configuration and secret-access checks still authorize that binding;
+the shell allowlist grants no extra company or vault access. Codex login keys,
+observability credentials, private runtime transport credentials, and unassigned
+host secrets retain their separate paths. Source/control evidence:
+[shared shell policy](../../packages/adapter-utils/src/codex-shell-environment.ts)
+and the adapter executor regressions. Live delivery remains a separate check
+under `runs-adapters/validation`.
+
 Scoped source review: [test authorization and resolution](../../server/src/routes/agents.ts)
 requires same-company `agents:create`, saved-agent update access when supplied,
 allowed environment selection, and normal secret/responsible-user checks. An
@@ -141,6 +161,18 @@ operations before the existing run cleanup releases any created GitHub access.
 No grant, token, authority cache or provider dispatch bypass is added. The
 [executor controls](../../server/src/services/native-runtime/native-session-executor.test.ts)
 remain separate from live latency and permitted/denied agent acceptance.
+
+Scoped OpenCode assigned-tool source evidence: local and remote native sessions
+use the server-owned authenticated relay. The provider sees bounded
+`paperclip_search_assigned_tools` and `paperclip_call_assigned_tool` schemas,
+then uses pinned aliases. Search intersects fresh grants and work modes; calls
+retain the run's original gateway policy, validation, approvals, revocation and
+audit path. Prompt arguments cannot select gateway authority. Assigned gateway
+launch credentials stay on the controller. Former direct-catalog OpenCode
+checkpoints refresh; other provider fingerprints stay unchanged. The
+[projection controls](../../server/src/services/native-runtime/assigned-mcp-tools.test.ts)
+and [wiring controls](../../server/src/services/native-runtime/native-session-executor.test.ts)
+are source evidence, not live permitted/denied sandbox acceptance.
 
 For a linked Codex subscription with server-resolved managed credential provenance,
 setup checks the resolved owner and stages a private probe copy before local or
@@ -179,6 +211,9 @@ existing hashed run ID. Controller startup phase spans carry no custom attribute
 Native controller setup and settlement phases use that same run hash, including
 assigned MCP discovery; neither tool definitions nor credentials are recorded.
 Both retain operator-controlled tracing; unconfigured clients stay silent.
+The native first-text span ends after text is committed for the existing run-events
+reader, including reasoning and completed responses. It exports only the bounded
+text kind and timing, with no text content or new agent access.
 This adds no agent API, credential access, run-log write, or recovery authority.
 See [the tracing contract](../../doc/observability.md#controller-preparation-phases).
 Live latency verification remains separate from the existing access baseline.
@@ -186,8 +221,8 @@ Live latency verification remains separate from the existing access baseline.
 API: `present` — representative operation IDs:
 
 - `GET /api/heartbeat-runs/{runId}`.
-- `GET /api/heartbeat-runs/{runId}/log`.
-- `GET /api/heartbeat-runs/{runId}/events`.
+- `GET /api/heartbeat-runs/{runId}/log` (optional `alignStartToRecord=true` extends a tail backward to its first complete record; this can exceed `limitBytes` by that record's prefix and retains the same access/redaction checks).
+- `GET /api/heartbeat-runs/{runId}/events` (optional `view=conversation` returns assistant messages and request lifecycles through the same access/redaction checks; `afterSeq` remains a sequence cursor).
 - `GET /api/heartbeat-runs/{runId}/workspace-operations`.
 - `GET /api/heartbeat-runs/{runId}/issues`.
 - `GET /api/companies/{companyId}/heartbeat-runs`.
@@ -254,6 +289,14 @@ own policy and access review.
 Gaps: Task-session listing and execution-context reset require board agent
 management at their HTTP routes. Native `call_api` preserves these denials; native
 continuation remains server-owned.
+
+Scoped source evidence: replacement of a workspace may bootstrap a newly
+admitted provider session only with matching current run/runner/lease identity,
+no prior activity or backup, and an atomic claim of an absent remote session
+directory. Existing sessions retain verified restore. This adds no reset or
+cleanup authority. Follow the [session recipe](../feature-map/runs-adapters.md#session)
+with a board-owned disposable fixture; live provider and actor-access evidence
+remain separate from the executor regressions.
 
 Scoped source-only evidence: [configuration changes](../../server/src/services/agent-configuration.ts)
 and [native execution/recovery](../../server/src/services/native-runtime/native-session-executor.ts)

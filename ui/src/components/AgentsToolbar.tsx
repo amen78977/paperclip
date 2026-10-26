@@ -1,23 +1,19 @@
 import { List, Network, Plus } from "lucide-react";
 import { ToolbarSearch } from "./ToolbarSearch";
-import { PageTabBar, type PageTabItem } from "./PageTabBar";
 import { Button } from "./ui/button";
 import { useInterfaceLabel } from "@/i18n/interface-labels";
 
 export interface AgentsToolbarProps {
   query: string;
   onQueryChange: (value: string) => void;
-  tab: string;
-  items: readonly PageTabItem[];
-  onTabChange: (value: string) => void;
   view: "list" | "org";
   onViewChange: (value: "list" | "org") => void;
   hideViewToggle?: boolean;
   onNewAgent: () => void;
 }
 
-/** Shared roster search, status navigation and actions for the page and stories. */
-export function AgentsToolbar({ query, onQueryChange, tab, items, onTabChange, view, onViewChange, hideViewToggle, onNewAgent }: AgentsToolbarProps) {
+/** Shared roster search, view controls and actions for the page and stories. */
+export function AgentsToolbar({ query, onQueryChange, view, onViewChange, hideViewToggle, onNewAgent }: AgentsToolbarProps) {
   const tr = useInterfaceLabel();
   return <div data-canonical-toolbar="agents" role="toolbar" aria-label={tr("Agents controls")} className="flex flex-wrap items-center gap-3">
     <div className="design-toolbar-controls flex w-full flex-wrap items-center gap-4">
@@ -29,9 +25,6 @@ export function AgentsToolbar({ query, onQueryChange, tab, items, onTabChange, v
       <div className="design-toolbar-actions">
         <Button size="sm" variant="outline" data-toolbar-primary onClick={onNewAgent}><Plus aria-hidden />{tr("New Agent")}</Button>
       </div>
-    </div>
-    <div className="collection-toolbar-tabs">
-      <PageTabBar items={items} value={tab} onValueChange={onTabChange} align="start" />
     </div>
   </div>;
 }

@@ -165,6 +165,15 @@ console.log("Applied Hermes Windows default-model and opt-in unsafe command perm
 const openCodeRuntimeConfig = path.join(runtime, "node_modules", "@paperclipai", "adapter-opencode-local", "dist", "server", "runtime-config.js");
 if (!existsSync(openCodeRuntimeConfig)) throw new Error(`Missing bundled OpenCode runtime config: ${openCodeRuntimeConfig}`);
 let openCodeSource = readFileSync(openCodeRuntimeConfig, "utf8");
+// Node cannot copy directory links without privileges on native Windows.
+// Match the source adapter fix while staging the published stable package.
+const openCodeLinkedConfig = '            errorOnExist: false,\n            dereference: false,';
+const openCodeMaterializedConfig = '            errorOnExist: false,\n            dereference: process.platform === "win32",';
+if (openCodeSource.includes(openCodeLinkedConfig)) {
+  openCodeSource = openCodeSource.replace(openCodeLinkedConfig, openCodeMaterializedConfig);
+} else if (!openCodeSource.includes(openCodeMaterializedConfig)) {
+  throw new Error("Published OpenCode config copying changed; review Windows link handling.");
+}
 const openCodePrematureApprovalReturn = '    if (!skipPermissions) {\n        return {\n            env: input.env,\n            notes: [],\n            cleanup: async () => { },\n        };\n    }\n';
 if (openCodeSource.includes(openCodePrematureApprovalReturn)) {
   // Old npm versions return before creating a runtime config whenever the

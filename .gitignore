@@ -101,6 +101,7 @@ test-results/
 .ci-profile/
 # Locally generated Arabic Windows release and large third-party runtime
 /desktop/runtime/
+/desktop/agent-support/__pycache__/
 /desktop/launcher/node_modules/
 /desktop/launcher/package-lock.json
 /desktop/launcher/electron-install.log

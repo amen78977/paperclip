@@ -94,7 +94,7 @@ import { getNativeReviewAssignment, readNativeReviewAssignmentContext, type Nati
 import { childReviewOutcomes } from "./child-review-outcomes.js";
 import { logActivity, persistActivity, publishActivity } from "../activity-log.js";
 import { captureRunIdentity } from "../run-identity.js";
-import { prepareNativeRunnerFileHandoff, type RemoteWorkspaceFileReader } from "./native-runner-file-handoff.js";
+import { prepareNativeRunnerFileHandoff, readVerifiedWorkspaceFile, type RemoteWorkspaceFileReader } from "./native-runner-file-handoff.js";
 import { MAX_ATTACHMENT_BYTES } from "../../attachment-types.js";
 import {
   READ_CURRENT_WAKE_COMMENTS_TOOL_DEFINITION,
@@ -179,6 +179,8 @@ type Binding = {
   assertBridgeAuthority?: (database?: Db) => Promise<void>;
   executionTargetKind?: "local" | "remote";
   readRemoteWorkspaceFile?: RemoteWorkspaceFileReader;
+  readRemoteTaskFile?: RemoteWorkspaceFileReader;
+  readRemoteApiFile?: (path: string, maxBytes: number) => Promise<Buffer>;
   currentWakeComments?: CurrentWakeCommentsBinding;
   chatAttachmentReadScope?: NativeChatAttachmentReadScope;
   syncIssueExternalObjects?: (issueId: string) => Promise<void>;
@@ -278,7 +280,7 @@ export class PaperclipRunnerToolAuthority {
           descriptor.allowedModes.includes(workMode) &&
           (descriptor.operationId !== "register_deliverable" ||
             (Boolean(this.binding.workspaceRoot) &&
-              ((this.binding.executionTargetKind ?? "local") === "local" || Boolean(this.binding.readRemoteWorkspaceFile)))),
+              ((this.binding.executionTargetKind ?? "local") === "local" || Boolean(this.binding.readRemoteWorkspaceFile || this.binding.readRemoteTaskFile)))),
       ).map((descriptor) => ({
         name: descriptor.operationId,
         description:
@@ -303,8 +305,9 @@ export class PaperclipRunnerToolAuthority {
                   },
                   contentRef: {
                     ...(descriptor.inputSchema.properties?.contentRef ?? {}),
-                    description:
-                      "Workspace-relative source path. Absolute paths, URLs, traversal, and symlinks are rejected.",
+                    description: this.binding.readRemoteTaskFile
+                      ? "Path to the file on the execution host: workspace-relative or absolute within a location granted to this task, including its agent home."
+                      : "Workspace-relative source path. Absolute paths, URLs, traversal, and symlinks are rejected.",
                   },
                 },
               }
@@ -446,7 +449,7 @@ export class PaperclipRunnerToolAuthority {
     }
     if (isConnectorTool(call.tool)) {
       if (!(this.binding.connectorAssignments ?? []).some((assignment) => assignment.tools.some((tool) => tool.name === call.tool))) throw forbidden("Connector tool is not available to this run");
-      const { run } = await this.#boundContext();
+      const { run } = await this.#boundContext({ includeChatWake: call.tool.startsWith("agentmail_") });
       const snapshot = record(run.contextSnapshot);
       if (call.tool.startsWith("agentmail_") && (isPaperclipExternalChatContractTurn(snapshot.paperclipWake) || String(snapshot.source ?? "").startsWith("chat:") || snapshot.paperclipExternalChatQuestionResponse)) throw forbidden("Restricted chat runs cannot use email actions");
       return executeConnectorTool(this.db, this.binding, call.tool, call.arguments);
@@ -1165,6 +1168,14 @@ export class PaperclipRunnerToolAuthority {
       await assertArtifactAccess();
       return { bytes: Buffer.concat(chunks), filename: asset.originalFilename ?? "file", contentType: asset.contentType };
     }
+    if (this.binding.executionTargetKind === "remote") {
+      if (!this.binding.readRemoteApiFile) throw badRequest("Remote workspace file uploads are unavailable for this execution provider");
+      await this.#boundContext();
+      const bytes = await this.binding.readRemoteApiFile(file.path!, RUNNER_API_MAX_BYTES);
+      await this.#boundContext();
+      if (bytes.length > RUNNER_API_MAX_BYTES) throw badRequest("Workspace file exceeds API transfer limit");
+      return { bytes, filename: basename(file.path!), contentType: "application/octet-stream" };
+    }
     const resolved = await workspaceFileResourceService(this.db).prepareDownload(this.binding.issueId, { path: file.path!, workspace: "auto" });
     const handle = await openRunnerApiWorkspaceFile(resolved.realPath);
     try {
@@ -1214,9 +1225,24 @@ export class PaperclipRunnerToolAuthority {
       ...(this.binding.museRuntime ? { authorizingUserId: this.binding.externalAuthorizingUserId } : {}) };
   }
 
-  async #boundContext() {
+  async #boundContext(options: { includeChatWake?: boolean } = {}) {
     if (this.binding.museRuntime && !this.binding.externalAuthorizingUserId) throw forbidden("Muse authorizer is unavailable");
-    const [row] = await this.db.select({ issue: issues, actor: agents, run: heartbeatRuns })
+    const [row] = await this.db.select({ issue: issues, actor: agents, run: {
+      id: heartbeatRuns.id,
+      companyId: heartbeatRuns.companyId,
+      agentId: heartbeatRuns.agentId,
+      runtimeMode: heartbeatRuns.runtimeMode,
+      status: heartbeatRuns.status,
+      invocationSource: heartbeatRuns.invocationSource,
+      responsibleUserId: heartbeatRuns.responsibleUserId,
+      contextSnapshot: sql<Record<string, unknown> | null>`case when jsonb_typeof(${heartbeatRuns.contextSnapshot}) = 'object'
+        then ${heartbeatRuns.contextSnapshot} - array['executionContinuation', 'paperclipTaskMarkdown',
+          'paperclipTaskMarkdownCompact', 'paperclipTaskMarkdownAssignment', 'paperclipTaskMarkdownAssignmentCompact',
+          'paperclipWorkspace', 'paperclipEnvironment', 'paperclipContinuationSummary', 'paperclipWakeComment']
+          ${options.includeChatWake ? sql`` : sql`- 'paperclipWake'`}
+        else ${heartbeatRuns.contextSnapshot} end`,
+      resultJson: heartbeatRuns.resultJson,
+    } })
       .from(heartbeatRuns)
       .innerJoin(issues, eq(issues.id, this.binding.issueId))
       .innerJoin(agents, eq(agents.id, this.binding.agentId))
@@ -1916,6 +1942,35 @@ export class PaperclipRunnerToolAuthority {
     if (!workspaceRoot) {
       throw new Error("paperclip_runner_file_handoff_workspace_unavailable");
     }
+    const current = await this.#boundContext();
+    const authorizeWorkspace = async (actor: typeof agents.$inferSelect) => {
+      if (this.binding.dotRuntime) {
+        if (!this.binding.workspaceBridge || actor.adapterConfig?.dotWorkspaceAccess !== true)
+          throw forbidden("Dot workspace access is required to publish workspace files.");
+        assertRunnerWorkspacePathAllowed(typeof input.contentRef === "string" ? input.contentRef : "");
+        await this.binding.assertBridgeAuthority?.();
+      }
+    };
+    await authorizeWorkspace(current.actor);
+    const fileBinding = {
+      companyId: this.binding.companyId,
+      issueId: this.binding.issueId,
+      runId: this.binding.runId,
+      agentId: this.binding.agentId,
+      workspaceRoot,
+      executionTargetKind: this.binding.executionTargetKind ?? "local",
+      readRemoteWorkspaceFile: this.binding.readRemoteWorkspaceFile,
+      readRemoteTaskFile: this.binding.readRemoteTaskFile,
+    } as const;
+    const prior = record(record(current.run.resultJson).semanticToolReceipts)[idempotencyKey];
+    const verifiedFile = prior === undefined ? await readVerifiedWorkspaceFile(fileBinding, {
+      filename: typeof input.filename === "string" ? input.filename : "",
+      contentType: typeof input.contentType === "string" ? input.contentType : "",
+      byteSize: typeof input.byteSize === "number" ? input.byteSize : Number.NaN,
+      sha256: typeof input.sha256 === "string" ? input.sha256 : "",
+      contentRef: typeof input.contentRef === "string" ? input.contentRef : "",
+      title: typeof input.title === "string" ? input.title : "",
+    }) : null;
     let publication:
       Awaited<ReturnType<typeof persistActivity>>["publication"] | null = null;
     let rollbackDefinitePreCommitFailure: (() => Promise<void>) | null = null;
@@ -1924,34 +1979,12 @@ export class PaperclipRunnerToolAuthority {
       idempotencyKey,
       input,
       async (tx, context) => {
-        if (this.binding.dotRuntime) {
-          if (!this.binding.workspaceBridge || context.actor.adapterConfig?.dotWorkspaceAccess !== true)
-            throw forbidden("Dot workspace access is required to publish workspace files.");
-          assertRunnerWorkspacePathAllowed(typeof input.contentRef === "string" ? input.contentRef : "");
-          await this.binding.assertBridgeAuthority?.();
-        }
+        await authorizeWorkspace(context.actor);
+        if (!verifiedFile) throw new Error("paperclip_runner_file_handoff_receipt_changed");
         const prepared = await prepareNativeRunnerFileHandoff({
           db: tx,
-          binding: {
-            companyId: this.binding.companyId,
-            issueId: this.binding.issueId,
-            runId: this.binding.runId,
-            agentId: this.binding.agentId,
-            workspaceRoot,
-            executionTargetKind: this.binding.executionTargetKind ?? "local",
-            readRemoteWorkspaceFile: this.binding.readRemoteWorkspaceFile,
-          },
-          deliverable: {
-            filename: typeof input.filename === "string" ? input.filename : "",
-            contentType:
-              typeof input.contentType === "string" ? input.contentType : "",
-            byteSize:
-              typeof input.byteSize === "number" ? input.byteSize : Number.NaN,
-            sha256: typeof input.sha256 === "string" ? input.sha256 : "",
-            contentRef:
-              typeof input.contentRef === "string" ? input.contentRef : "",
-            title: typeof input.title === "string" ? input.title : "",
-          },
+          binding: fileBinding,
+          verifiedFile,
           storage: this.binding.storage,
         });
         rollbackDefinitePreCommitFailure =
@@ -2150,7 +2183,7 @@ export class PaperclipRunnerToolAuthority {
     });
   }
 
-  async #sourcePlanApproval(context: { issue: typeof issues.$inferSelect; run: typeof heartbeatRuns.$inferSelect }) {
+  async #sourcePlanApproval(context: { issue: typeof issues.$inferSelect; run: Pick<typeof heartbeatRuns.$inferSelect, "responsibleUserId"> }) {
     const plan = await handoffPlanContext(this.db, context.issue, this.#privacyActor(context.run));
     if (!plan || !this.binding.museRuntime) return plan;
     const document = await documentService(this.db).getIssueDocumentByKey(plan.sourceIssueId, "plan");

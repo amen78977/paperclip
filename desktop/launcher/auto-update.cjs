@@ -5,6 +5,7 @@
 // Updates download unattended, and apply automatically when the app closes,
 // so running agents and unsaved edits are not interrupted by forced restarts.
 const http = require("node:http");
+const { requestJson } = require("./json-request.cjs");
 const { getLatestRelease, isNewerVersion, RETRY_AFTER_MS } = require("./update-watch.cjs");
 
 const RELEASE_PROVIDER = Object.freeze({ provider: "github", owner: "amen78977", repo: "paperclip" });
@@ -15,21 +16,7 @@ const IDLE_SECONDS_FOR_RESTART = 30 * 60;
 const IDLE_RETRY_MS = 10 * 60 * 1000;
 
 function localJson(path, { httpClient = http, timeoutMs = 8000 } = {}) {
-  return new Promise((resolve) => {
-    let done = false;
-    const finish = (result) => { if (!done) { done = true; resolve(result); } };
-    const req = httpClient.get({ hostname: API_HOST, port: API_PORT, path, timeout: timeoutMs }, (res) => {
-      if (res.statusCode !== 200) { res.resume(); finish(null); return; }
-      let data = "";
-      res.on("data", (chunk) => {
-        if (data.length + chunk.length > 3_000_000) { req.destroy(); finish(null); }
-        else data += chunk;
-      });
-      res.on("end", () => { try { finish(JSON.parse(data)); } catch { finish(null); } });
-    });
-    req.once("timeout", () => { req.destroy(); finish(null); });
-    req.once("error", () => finish(null));
-  });
+  return requestJson({ hostname: API_HOST, port: API_PORT, path }, { httpClient, timeoutMs });
 }
 
 async function canRestartWithoutInterruptingAgents({ fetchJson = localJson } = {}) {
@@ -45,32 +32,13 @@ async function canRestartWithoutInterruptingAgents({ fetchJson = localJson } = {
   return true;
 }
 
-function createPreInstallBackup({ httpClient = http, timeoutMs = 180_000 } = {}) {
-  return new Promise((resolve) => {
-    let settled = false;
-    const finish = (value) => { if (!settled) { settled = true; resolve(value); } };
-    const req = httpClient.request({
+async function createPreInstallBackup({ httpClient = http, timeoutMs = 180_000 } = {}) {
+  const result = await requestJson({
       hostname: API_HOST, port: API_PORT, path: BACKUP_PATH,
-      method: "POST", timeout: timeoutMs,
+      method: "POST",
       headers: { "Content-Type": "application/json", "Content-Length": 2 },
-    }, (res) => {
-      let data = "";
-      res.on("data", (chunk) => {
-        if (data.length + chunk.length > 90_000) { req.destroy(); finish(false); }
-        else data += chunk;
-      });
-      res.on("end", () => {
-        if (res.statusCode !== 201) return finish(false);
-        try {
-          const result = JSON.parse(data);
-          finish(Boolean(result.finishedAt && result.startedAt && result.backupDir));
-        } catch { finish(false); }
-      });
-    });
-    req.once("timeout", () => { req.destroy(); finish(false); });
-    req.once("error", () => finish(false));
-    req.end("{}");
-  });
+  }, { httpClient, timeoutMs, maxBytes: 90_000, expectedStatus: 201, body: "{}" });
+  return Boolean(result?.finishedAt && result?.startedAt && result?.backupDir);
 }
 
 function startAutomaticUpdates({ app, updater, onLog = () => {},
@@ -100,7 +68,8 @@ function startAutomaticUpdates({ app, updater, onLog = () => {},
       // Never silently close the desktop while the user is working.
       if (idleSeconds() < IDLE_SECONDS_FOR_RESTART) return false;
       const safe = await safeToRestart();
-      if (!safe || stopped || restarting || !updater.autoInstallOnAppQuit) return false;
+      if (!safe || stopped || restarting || !updater.autoInstallOnAppQuit
+        || idleSeconds() < IDLE_SECONDS_FOR_RESTART) return false;
       restarting = true;
       onLog("auto_update_idle_restarting", backedUpVersion);
       updater.quitAndInstall(true, true);
